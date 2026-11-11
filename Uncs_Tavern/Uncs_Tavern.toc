@@ -7,6 +7,7 @@
 ## SavedVariablesPerCharacter: UncsTavernCharDB
 
 Core.lua
+Comm.lua
 UI\MainFrame.lua
 
 Modules\Roster.lua

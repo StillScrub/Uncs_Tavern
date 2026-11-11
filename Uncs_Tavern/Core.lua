@@ -73,6 +73,23 @@ eventFrame:SetScript("OnEvent", function(_, event, ...)
 end)
 
 ---------------------------------------------------------------------------
+-- Internal callbacks between modules (not game events):
+--   ns:RegisterCallback("ADDON_USERS_CHANGED", fn)   ns:Fire("ADDON_USERS_CHANGED", ...)
+---------------------------------------------------------------------------
+local callbacks = {}
+
+function ns:RegisterCallback(name, fn)
+    callbacks[name] = callbacks[name] or {}
+    table.insert(callbacks[name], fn)
+end
+
+function ns:Fire(name, ...)
+    local list = callbacks[name]
+    if not list then return end
+    for _, fn in ipairs({ unpack(list) }) do fn(name, ...) end
+end
+
+---------------------------------------------------------------------------
 -- Saved variables (with dbVersion + migrations)
 ---------------------------------------------------------------------------
 local DB_VERSION      = 1

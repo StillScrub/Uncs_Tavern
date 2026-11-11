@@ -334,6 +334,7 @@ local function Build(p)
 
     ns:RegisterEvent("GUILD_ROSTER_UPDATE", OnRosterEvent)
     ns:RegisterEvent("PLAYER_GUILD_UPDATE", OnRosterEvent)
+    ns:RegisterCallback("ADDON_USERS_CHANGED", OnRosterEvent)
 
     panel:SetScript("OnShow", function()
         RequestRoster()
