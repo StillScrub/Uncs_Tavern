@@ -162,6 +162,23 @@ Comm:RegisterHandler("H", function(sender, version, flag)
     end
 end)
 
+-- Manual sync (Roster's Sync button): ask everyone to announce themselves again.
+-- Other modules can piggyback via ns:RegisterCallback("SYNC_REQUESTED", fn).
+-- Returns true, or false + seconds left on the cooldown.
+local SYNC_COOLDOWN = 30
+local lastSync = -SYNC_COOLDOWN
+Comm.SYNC_COOLDOWN = SYNC_COOLDOWN
+
+function Comm:RequestSync()
+    if not IsInGuild() then return false, 0 end
+    local left = SYNC_COOLDOWN - (GetTime() - lastSync)
+    if left > 0 then return false, math.ceil(left) end
+    lastSync = GetTime()
+    SendHello("Q")
+    ns:Fire("SYNC_REQUESTED")
+    return true
+end
+
 function Comm:HasAddon(name)
     local users = Users()
     local u = users and users[Normalize(name)]

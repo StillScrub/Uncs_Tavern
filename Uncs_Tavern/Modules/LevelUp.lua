@@ -71,7 +71,8 @@ ns:RegisterEvent("PLAYER_LEVEL_UP", OnLevelUp)
 ns.Settings:RegisterToggle({
     key = "levelUpPosts",
     label = "Post my level-ups to guild chat",
-    description = "Sends \"[Unc's Tavern] <Name> reached level <N>!\" when you level up. Preview with /tavern levelup.",
+    description = "Sends \"[Unc's Tavern] <Name> reached level <N>!\" when you level up. Preview with /tavern levelup.\n"
+        .. ns.DISCORD_NOTE,
     order = 10,
 })
 

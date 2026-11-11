@@ -332,6 +332,39 @@ local function Build(p)
     footer = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     footer:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 8, 6)
 
+    local discordNote = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    discordNote:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, 6)
+    discordNote:SetJustifyH("RIGHT")
+    discordNote:SetWordWrap(false)
+    discordNote:SetText(ns.DISCORD_NOTE_SHORT)
+
+    -- Sync: ask every guild member running the addon to announce themselves again.
+    local syncButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    syncButton:SetSize(80, 22)
+    syncButton:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -3)
+    syncButton:SetText("Sync")
+    syncButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Sync with guild")
+        GameTooltip:AddLine("Asks everyone running " .. ns.title .. " to send their info again.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    syncButton:SetScript("OnLeave", GameTooltip_Hide)
+    syncButton:SetScript("OnClick", function(self)
+        if not ns.Comm then return end
+        local ok, left = ns.Comm:RequestSync()
+        if ok then
+            ns:Print("Syncing with the guild...")
+            RequestRoster()
+            self:Disable()
+            C_Timer.After(ns.Comm.SYNC_COOLDOWN, function() self:Enable() end)
+        elseif left and left > 0 then
+            ns:Print(("Sync is on cooldown (%ds)."):format(left))
+        else
+            ns:Print("You are not in a guild.")
+        end
+    end)
+
     ns:RegisterEvent("GUILD_ROSTER_UPDATE", OnRosterEvent)
     ns:RegisterEvent("PLAYER_GUILD_UPDATE", OnRosterEvent)
     ns:RegisterCallback("ADDON_USERS_CHANGED", OnRosterEvent)
