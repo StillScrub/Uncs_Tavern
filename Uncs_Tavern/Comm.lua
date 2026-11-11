@@ -18,7 +18,7 @@ ns.Comm = Comm
 
 local PREFIX         = "UNCST"
 local PROTOCOL       = "1"
-local SEND_INTERVAL  = 1.5   -- seconds between our messages (well under server limits)
+local SEND_INTERVAL  = 1.0   -- seconds between our messages (the server allows about 1/s sustained)
 local RETRY_DELAY    = 5     -- seconds before retrying a refused send
 local MAX_TRIES      = 3
 local HELLO_DELAY    = 10    -- seconds after login before announcing (let the UI settle)
@@ -105,6 +105,10 @@ function Comm:Send(msgType, ...)
     end
 end
 
+function Comm:QueueLength()
+    return #queue
+end
+
 function Comm:RegisterHandler(msgType, fn)
     handlers[msgType] = fn
 end
@@ -136,7 +140,11 @@ local function SendHello(flag)
     Comm:Send("H", ns.version, flag)
 end
 
+local helloCount = 0 -- hellos heard this session (for the Sync button's summary)
+function Comm:HelloCount() return helloCount end
+
 Comm:RegisterHandler("H", function(sender, version, flag)
+    helloCount = helloCount + 1
     local users = Users()
     if not users then return end
     local isNew = not users[sender] or users[sender].version ~= version

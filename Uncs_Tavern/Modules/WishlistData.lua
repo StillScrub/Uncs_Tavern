@@ -10,7 +10,7 @@
 --   received  how many have arrived so far
 --   price     copper per item the requester will pay; 0 = gift
 --   note      short free text
---   created / updated   time() stamps; sync will merge by `updated`
+--   created / updated   GetServerTime() stamps (same clock for everyone); sync merges by `updated`
 --   deleted   true = removed (kept as a tombstone so sync can spread the removal)
 --
 -- Fires ns callback "WISHLIST_CHANGED" after any change.
@@ -33,16 +33,30 @@ Wishlist.MAX_QTY        = 9999
 Wishlist.MAX_PRICE      = 9999 * 10000 -- 9999 gold
 Wishlist.MAX_NOTE       = 60
 Wishlist.MAX_OPEN_OWN   = 25
+Wishlist.TOMBSTONE_DAYS = 30 -- removed requests are forgotten after this
 
-local function Store()
+local function Now()
+    return GetServerTime and GetServerTime() or time()
+end
+Wishlist.Now = Now
+
+-- Per-guild bucket: { requests = {}, lastSync = serverTime of last complete catch-up }
+local function Bucket()
     local key = ns:GuildKey()
     if not key then return nil end
     ns.db.wishlist[key] = ns.db.wishlist[key] or { requests = {} }
-    return ns.db.wishlist[key].requests
+    return ns.db.wishlist[key]
+end
+Wishlist.Bucket = Bucket
+
+local function Store()
+    local b = Bucket()
+    return b and b.requests
 end
 
-local function Changed(req)
-    ns:Fire("WISHLIST_CHANGED", req)
+-- source: "local" (this player changed it) or "remote" (arrived via sync)
+local function Changed(req, source)
+    ns:Fire("WISHLIST_CHANGED", req, source or "local")
 end
 
 function Wishlist:IsOpen(req)
@@ -98,7 +112,7 @@ function Wishlist:Add(itemID, qty, price, note)
         return nil, "You already have " .. self.MAX_OPEN_OWN .. " open requests."
     end
 
-    local now = time()
+    local now = Now()
     local me = ns:PlayerName()
     local req = {
         id = ("%s:%d:%d"):format(me, now, math.random(1000, 9999)),
@@ -122,9 +136,60 @@ function Wishlist:Remove(id)
     local req = store and store[id]
     if not req or not self:IsMine(req) then return false end
     req.deleted = true
-    req.updated = time()
+    req.updated = math.max(Now(), (req.updated or 0) + 1) -- always newer than the copy others hold
     Changed(req)
     return true
+end
+
+-- Every stored request including tombstones (for sync).
+function Wishlist:All()
+    local out = {}
+    local store = Store()
+    if store then
+        for _, req in pairs(store) do out[#out + 1] = req end
+    end
+    return out
+end
+
+-- Validates a request that arrived from another player and merges it.
+-- Rules (see header): newer `updated` wins; on a tie a removal wins; nobody
+-- else's copy may change one of MY requests that I already have.
+-- Returns true if the store changed.
+function Wishlist:Merge(rec)
+    local store = Store()
+    if not store or type(rec) ~= "table" then return false end
+    if type(rec.id) ~= "string" or type(rec.requester) ~= "string" then return false end
+    if rec.id:sub(1, #rec.requester + 1) ~= rec.requester .. ":" then return false end
+    if not rec.itemID or not C_Item.GetItemInfoInstant(rec.itemID) then return false end
+    if not rec.qty or rec.qty < 1 or rec.qty > self.MAX_QTY then return false end
+    if not rec.price or rec.price < 0 or rec.price > self.MAX_PRICE then return false end
+    if not rec.updated or not rec.created then return false end
+    if rec.deleted and rec.updated < Now() - self.TOMBSTONE_DAYS * 86400 then return false end
+
+    local cur = store[rec.id]
+    if cur then
+        if self:IsMine(cur) then return false end -- my own copy is the authority
+        local newer = rec.updated > cur.updated or (rec.updated == cur.updated and rec.deleted and not cur.deleted)
+        if not newer then return false end
+    end
+    store[rec.id] = {
+        id = rec.id, requester = rec.requester, class = rec.class,
+        itemID = rec.itemID, qty = rec.qty, received = math.min(rec.received or 0, rec.qty),
+        price = rec.price, note = (rec.note or ""):sub(1, self.MAX_NOTE),
+        created = rec.created, updated = rec.updated, deleted = rec.deleted or nil,
+    }
+    Changed(store[rec.id], "remote")
+    return true
+end
+
+-- Forget removed requests older than TOMBSTONE_DAYS.
+function Wishlist:Purge()
+    local store = Store()
+    if not store then return end
+    local cutoff = Now() - self.TOMBSTONE_DAYS * 86400
+    for id, req in pairs(store) do
+        if req.deleted and (req.updated or 0) < cutoff then store[id] = nil end
+    end
 end
 
 function Wishlist:Get(id)
