@@ -4,6 +4,8 @@
 --   R  |requester|class|itemID|qty|received|price|created|rand|updated|deleted|note
 --        one request. id is rebuilt as "requester:created:rand". Sent live whenever
 --        you add/remove a request, and during catch-up.
+--   C  |requester|created|rand|claimer|class|qty|updated|deleted
+--        one claim ("I'm sending N") on the request requester:created:rand.
 --   WQ |since          "send me everything updated since <serverTime>" (0 = everything)
 --   WS |asker          "I'm answering <asker>" - other would-be answerers stand down
 --   WE |asker|time     end of the answer; the asker stores <time> as lastSync
@@ -31,6 +33,24 @@ local function SendRecord(req)
     local rand = req.id:match(":(%d+)$") or "0"
     Comm:Send("R", req.requester, req.class or "", req.itemID, req.qty, req.received or 0,
         req.price or 0, req.created, rand, req.updated, req.deleted and 1 or 0, req.note or "")
+end
+
+local function SendClaim(c)
+    local requester, created, rand = c.reqId:match("^(.*):(%d+):(%d+)$")
+    if not requester then return end
+    Comm:Send("C", requester, created, rand, c.claimer, c.class or "", c.qty, c.updated, c.deleted and 1 or 0)
+end
+
+local function DecodeClaim(requester, created, rand, claimer, class, qty, updated, deleted)
+    if not requester or not tonumber(created) or not tonumber(rand) then return nil end
+    return {
+        reqId = ("%s:%s:%s"):format(requester, created, rand),
+        claimer = claimer,
+        class = (class ~= "" and class) or nil,
+        qty = tonumber(qty),
+        updated = tonumber(updated),
+        deleted = deleted == "1",
+    }
 end
 
 local function DecodeRecord(requester, class, itemID, qty, received, price, created, rand, updated, deleted, note)
@@ -64,8 +84,12 @@ local function SendQuery(full)
 end
 
 local function PushOwn(sinceTime)
+    local me = ns:PlayerName()
     for _, req in ipairs(W:All()) do
         if W:IsMine(req) and req.updated >= sinceTime then SendRecord(req) end
+    end
+    for _, c in ipairs(W:AllClaims()) do
+        if c.claimer == me and c.updated >= sinceTime then SendClaim(c) end
     end
 end
 
@@ -74,6 +98,9 @@ local function Answer(asker, since)
     Comm:Send("WS", asker)
     for _, req in ipairs(W:All()) do
         if req.updated >= since then SendRecord(req) end
+    end
+    for _, c in ipairs(W:AllClaims()) do
+        if c.updated >= since then SendClaim(c) end
     end
     Comm:Send("WE", asker, startTime)
 end
@@ -115,11 +142,20 @@ Comm:RegisterHandler("R", function(_, ...)
     if rec and W:Merge(rec) then mergedCount = mergedCount + 1 end
 end)
 
+Comm:RegisterHandler("C", function(_, ...)
+    local rec = DecodeClaim(...)
+    if rec and W:MergeClaim(rec) then mergedCount = mergedCount + 1 end
+end)
+
 ---------------------------------------------------------------------------
 -- Live changes, login, Sync button
 ---------------------------------------------------------------------------
 ns:RegisterCallback("WISHLIST_CHANGED", function(_, req, source)
     if source == "local" and req and W:IsMine(req) then SendRecord(req) end
+end)
+
+ns:RegisterCallback("CLAIM_CHANGED", function(_, claim, source)
+    if source == "local" and claim and claim.claimer == ns:PlayerName() then SendClaim(claim) end
 end)
 
 local started = false

@@ -1,19 +1,20 @@
 -- Modules\Wishlist.lua: Wishlist tab (UI only; data lives in WishlistData.lua).
 -- Step 1: add a request (drag an item into the slot, quantity, note, payment) and
--- list open requests with filters. Sync, claims, rule requests and item search
--- come in later steps. (Shift-click was dropped: on stacks it opens the bag's
+-- list open requests with filters. Claims: other people's rows have a Claim
+-- button ("I'm sending N"). Rule requests and item search come in later steps. (Shift-click was dropped: on stacks it opens the bag's
 -- split-stack box, which then grabs keyboard input.)
 local _, ns = ...
 local W = ns.Wishlist
 
 local ROW_HEIGHT = 22
 local COLUMNS = {
-    { key = "item",      label = "Item",      width = 190 },
-    { key = "progress",  label = "Progress",  width = 60, justify = "CENTER" },
-    { key = "requester", label = "Requester", width = 120 },
-    { key = "payment",   label = "Payment",   width = 100 },
-    { key = "note",      label = "Note",      width = 130 },
-    { key = "actions",   label = "",          width = 30 },
+    { key = "item",      label = "Item",      width = 165 },
+    { key = "progress",  label = "Progress",  width = 55, justify = "CENTER" },
+    { key = "requester", label = "Requester", width = 110 },
+    { key = "payment",   label = "Payment",   width = 90 },
+    { key = "note",      label = "Note",      width = 100 },
+    { key = "claims",    label = "Claimed",   width = 75, justify = "CENTER" },
+    { key = "actions",   label = "",          width = 55 },
 }
 do
     local x = 0
@@ -119,6 +120,65 @@ local function TakeCursorItem()
 end
 
 ---------------------------------------------------------------------------
+-- Claim popup: "How many will you send?" (0 cancels your claim)
+---------------------------------------------------------------------------
+local CLAIM_POPUP = "UNCSTAVERN_CLAIM"
+
+local function PopupEditBox(popup)
+    return popup.editBox or popup.EditBox or (popup.GetEditBox and popup:GetEditBox())
+end
+
+local function SubmitClaim(popup, reqId)
+    local box = PopupEditBox(popup)
+    local claim, err = W:SetClaim(reqId, box and box:GetText())
+    if not claim then
+        ns:Print(err)
+    elseif claim.deleted then
+        ns:Print("Claim cancelled.")
+    else
+        ns:Print(("You claimed %d. The requester and guild can see it."):format(claim.qty))
+    end
+end
+
+StaticPopupDialogs[CLAIM_POPUP] = {
+    text = "How many will you send?\n%s\n\n(0 cancels your claim)",
+    button1 = "Claim",
+    button2 = "Cancel",
+    hasEditBox = true,
+    maxLetters = 4,
+    OnShow = function(self, data)
+        local box = PopupEditBox(self)
+        if box and data then
+            box:SetNumeric(true)
+            box:SetText(tostring(data.default))
+            box:HighlightText()
+            box:SetFocus()
+        end
+    end,
+    OnAccept = function(self, data)
+        if data then SubmitClaim(self, data.reqId) end
+    end,
+    EditBoxOnEnterPressed = function(box, data)
+        local popup = box:GetParent()
+        if data then SubmitClaim(popup, data.reqId) end
+        popup:Hide()
+    end,
+    EditBoxOnEscapePressed = function(box) box:GetParent():Hide() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+local function OpenClaim(req)
+    local mine = W:MyClaim(req.id)
+    local free = W:Unclaimed(req, true)
+    local name = C_Item.GetItemInfo(req.itemID) or ("item " .. req.itemID)
+    local line = ("%s for %s (%d still unclaimed)"):format(name, req.requester, free)
+    StaticPopup_Show(CLAIM_POPUP, line, nil, { reqId = req.id, default = mine and mine.qty or free })
+end
+
+---------------------------------------------------------------------------
 -- List rows
 ---------------------------------------------------------------------------
 local function RowOnEnter(row)
@@ -134,6 +194,17 @@ local function RowOnEnter(row)
     GameTooltip:AddDoubleLine("Wanted", ("%d / %d"):format(req.received or 0, req.qty), 1, 0.82, 0, 1, 1, 1)
     GameTooltip:AddDoubleLine("Payment", W:PriceText(req.price) .. (req.price > 0 and " each" or ""), 1, 0.82, 0, 1, 1, 1)
     if req.note and req.note ~= "" then GameTooltip:AddDoubleLine("Note", req.note, 1, 0.82, 0, 1, 1, 1) end
+    local claims = W:ClaimsFor(req.id)
+    if #claims > 0 then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Being sent by:", 1, 0.82, 0)
+        for _, cl in ipairs(claims) do
+            local cc = ClassColor(cl.class)
+            GameTooltip:AddDoubleLine("  " .. cl.claimer, cl.qty .. date("   (%b %d %H:%M)", cl.updated),
+                cc.r, cc.g, cc.b, 1, 1, 1)
+        end
+        GameTooltip:AddLine(("Unclaimed: %d"):format(W:Unclaimed(req)), 0.8, 0.8, 0.8)
+    end
     GameTooltip:AddLine(date("Added %Y-%m-%d %H:%M", req.created), 0.5, 0.5, 0.5)
     GameTooltip:AddLine("Hover the icon for item details", 0.5, 0.5, 0.5)
     GameTooltip:Show()
@@ -187,6 +258,24 @@ local function InitRow(row, entry)
             if r then W:Remove(r.id) end
         end)
 
+        row.claim = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+        row.claim:SetSize(actions.width - 6, ROW_HEIGHT - 4)
+        row.claim:SetPoint("LEFT", row, "LEFT", actions.x + 2, 0)
+        row.claim:SetNormalFontObject("GameFontNormalSmall")
+        row.claim:SetHighlightFontObject("GameFontHighlightSmall")
+        row.claim:SetScript("OnClick", function(self)
+            local r = self:GetParent().data
+            if r then OpenClaim(r) end
+        end)
+        row.claim:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine("I'm sending...")
+            GameTooltip:AddLine("Tell the guild how many you'll send, so nobody doubles up. "
+                .. "Claims last " .. W.CLAIM_HOURS .. " hours.", 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        row.claim:SetScript("OnLeave", GameTooltip_Hide)
+
         row:SetScript("OnEnter", RowOnEnter)
         row:SetScript("OnLeave", GameTooltip_Hide)
     end
@@ -213,8 +302,23 @@ local function InitRow(row, entry)
     cells[4]:SetText(W:PriceText(req.price))
     cells[5]:SetText(req.note or "")
     cells[5]:SetTextColor(0.8, 0.8, 0.8)
-    cells[6]:SetText("")
-    row.remove:SetShown(W:IsMine(req))
+    local claimed = W:ClaimedTotal(req.id)
+    local mine = W:MyClaim(req.id)
+    if mine then
+        cells[6]:SetText(claimed > mine.qty and ("You %d +%d"):format(mine.qty, claimed - mine.qty) or ("You " .. mine.qty))
+        cells[6]:SetTextColor(0.25, 1, 0.25)
+    elseif claimed > 0 then
+        cells[6]:SetText(claimed)
+        cells[6]:SetTextColor(1, 0.82, 0)
+    else
+        cells[6]:SetText("")
+    end
+    cells[7]:SetText("")
+
+    local isMine = W:IsMine(req)
+    row.remove:SetShown(isMine)
+    row.claim:SetShown(not isMine and (mine ~= nil or W:Unclaimed(req) > 0))
+    row.claim:SetText(mine and "Edit" or "Claim")
 end
 
 ---------------------------------------------------------------------------

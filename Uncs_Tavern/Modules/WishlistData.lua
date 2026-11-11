@@ -24,6 +24,8 @@
 --     arriving later can't bring a removed request back.
 --   * A request leaves the list only when the requester removes it, or when received
 --     reaches qty (fulfilled).
+--   * Claims ("I'm sending N") live in a separate table, one per claimer per request.
+--     Only the claimer changes their own claim; a claim can never touch the request.
 local _, ns = ...
 
 local Wishlist = {}
@@ -182,13 +184,134 @@ function Wishlist:Merge(rec)
     return true
 end
 
--- Forget removed requests older than TOMBSTONE_DAYS.
+---------------------------------------------------------------------------
+-- Claims: "I'm sending N".
+--   bucket.claims[reqId .. "#" .. claimer] = { reqId, claimer, class, qty, updated, deleted }
+-- A claim counts for CLAIM_HOURS after its last change, then lapses, so items
+-- aren't blocked forever by someone who never sent them.
+---------------------------------------------------------------------------
+Wishlist.CLAIM_HOURS = 72
+
+local function Claims()
+    local b = Bucket()
+    if not b then return nil end
+    b.claims = b.claims or {}
+    return b.claims
+end
+
+local function ClaimChanged(claim, source)
+    ns:Fire("CLAIM_CHANGED", claim, source or "local")
+    ns:Fire("WISHLIST_CHANGED", nil, source or "local")
+end
+
+function Wishlist:IsClaimActive(c)
+    return c ~= nil and not c.deleted and (c.qty or 0) > 0
+        and (c.updated or 0) >= Now() - self.CLAIM_HOURS * 3600
+end
+
+-- Active claims on one request, oldest first.
+function Wishlist:ClaimsFor(reqId)
+    local out = {}
+    local claims = Claims()
+    if not claims then return out end
+    for _, c in pairs(claims) do
+        if c.reqId == reqId and self:IsClaimActive(c) then out[#out + 1] = c end
+    end
+    table.sort(out, function(a, b) return a.updated < b.updated end)
+    return out
+end
+
+function Wishlist:ClaimedTotal(reqId)
+    local n = 0
+    for _, c in ipairs(self:ClaimsFor(reqId)) do n = n + c.qty end
+    return n
+end
+
+function Wishlist:MyClaim(reqId)
+    local claims = Claims()
+    local c = claims and claims[reqId .. "#" .. ns:PlayerName()]
+    return self:IsClaimActive(c) and c or nil
+end
+
+-- How many are still needed and not claimed (optionally not counting my own claim).
+function Wishlist:Unclaimed(req, ignoreMine)
+    local claimed = self:ClaimedTotal(req.id)
+    if ignoreMine then
+        local mine = self:MyClaim(req.id)
+        if mine then claimed = claimed - mine.qty end
+    end
+    return math.max(0, req.qty - (req.received or 0) - claimed)
+end
+
+-- Set (or with 0, cancel) my claim. Returns the claim, or nil + a message.
+function Wishlist:SetClaim(reqId, qty)
+    local claims = Claims()
+    local req = self:Get(reqId)
+    if not claims or not self:IsOpen(req) then return nil, "That request is no longer open." end
+    if self:IsMine(req) then return nil, "You can't claim your own request." end
+    qty = tonumber(qty)
+    if not qty or qty < 0 then return nil, "Enter a number (0 cancels your claim)." end
+    qty = math.floor(qty)
+    local max = self:Unclaimed(req, true)
+    if qty > max then return nil, ("Only %d still unclaimed."):format(max) end
+    local me = ns:PlayerName()
+    local id = reqId .. "#" .. me
+    local cur = claims[id]
+    if qty == 0 and not cur then return nil, "You have no claim on this request." end
+    local c = {
+        reqId = reqId, claimer = me, class = ns:PlayerClass(), qty = qty,
+        updated = math.max(Now(), cur and (cur.updated + 1) or 0),
+        deleted = (qty == 0) or nil,
+    }
+    claims[id] = c
+    ClaimChanged(c)
+    return c
+end
+
+-- Every stored claim including cancelled ones (for sync).
+function Wishlist:AllClaims()
+    local out = {}
+    local claims = Claims()
+    if claims then
+        for _, c in pairs(claims) do out[#out + 1] = c end
+    end
+    return out
+end
+
+-- Validates a claim from another player and merges it. Same rules as requests:
+-- newer wins, cancellation wins ties, nobody else can change MY claim.
+function Wishlist:MergeClaim(rec)
+    local claims = Claims()
+    if not claims or type(rec) ~= "table" then return false end
+    if type(rec.reqId) ~= "string" or type(rec.claimer) ~= "string" or rec.claimer == "" then return false end
+    if not rec.qty or rec.qty < 0 or rec.qty > self.MAX_QTY or not rec.updated then return false end
+    if rec.updated < Now() - self.TOMBSTONE_DAYS * 86400 then return false end
+    local id = rec.reqId .. "#" .. rec.claimer
+    local cur = claims[id]
+    if cur then
+        if cur.claimer == ns:PlayerName() then return false end -- my claim is mine
+        local newer = rec.updated > cur.updated or (rec.updated == cur.updated and rec.deleted and not cur.deleted)
+        if not newer then return false end
+    end
+    claims[id] = {
+        reqId = rec.reqId, claimer = rec.claimer, class = rec.class, qty = rec.qty,
+        updated = rec.updated, deleted = rec.deleted or nil,
+    }
+    ClaimChanged(claims[id], "remote")
+    return true
+end
+
+-- Forget removed requests and old claims after TOMBSTONE_DAYS.
 function Wishlist:Purge()
     local store = Store()
     if not store then return end
     local cutoff = Now() - self.TOMBSTONE_DAYS * 86400
     for id, req in pairs(store) do
         if req.deleted and (req.updated or 0) < cutoff then store[id] = nil end
+    end
+    local claims = Claims()
+    for id, c in pairs(claims) do
+        if (c.updated or 0) < cutoff then claims[id] = nil end
     end
 end
 
