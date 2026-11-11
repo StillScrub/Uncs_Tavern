@@ -8,6 +8,7 @@
 --   itemID    number
 --   qty       how many wanted in total
 --   received  how many have arrived so far
+--   receivedFrom  { [senderName] = n } who sent them (so their claims count as delivered)
 --   price     copper per item the requester will pay; 0 = gift
 --   note      short free text
 --   created / updated   GetServerTime() stamps (same clock for everyone); sync merges by `updated`
@@ -178,10 +179,92 @@ function Wishlist:Merge(rec)
         id = rec.id, requester = rec.requester, class = rec.class,
         itemID = rec.itemID, qty = rec.qty, received = math.min(rec.received or 0, rec.qty),
         price = rec.price, note = (rec.note or ""):sub(1, self.MAX_NOTE),
+        receivedFrom = type(rec.receivedFrom) == "table" and rec.receivedFrom or nil,
         created = rec.created, updated = rec.updated, deleted = rec.deleted or nil,
     }
     Changed(store[rec.id], "remote")
     return true
+end
+
+---------------------------------------------------------------------------
+-- Received items (only the requester changes these on their own requests)
+---------------------------------------------------------------------------
+local MAX_FROM = 8 -- senders remembered per request (keeps sync messages small)
+
+-- "Name:5,Other Name:3" <-> { ["Name"] = 5, ... }
+function Wishlist:EncodeFrom(from)
+    if type(from) ~= "table" then return "" end
+    -- Biggest senders first; capped so the sync message stays under 255 bytes.
+    local list = {}
+    for name, n in pairs(from) do list[#list + 1] = { name = name, n = n } end
+    table.sort(list, function(a, b) return a.n > b.n end)
+    local parts, len = {}, 0
+    for _, e in ipairs(list) do
+        local part = e.name .. ":" .. e.n
+        if #parts >= MAX_FROM or len + #part > 70 then break end
+        parts[#parts + 1] = part
+        len = len + #part + 1
+    end
+    return table.concat(parts, ",")
+end
+
+function Wishlist:DecodeFrom(text)
+    if type(text) ~= "string" or text == "" then return nil end
+    local from, count = {}, 0
+    for name, n in text:gmatch("([^,:]+):(%d+)") do
+        count = count + 1
+        if count > MAX_FROM then break end
+        from[name] = math.min(tonumber(n), self.MAX_QTY)
+    end
+    return next(from) and from or nil
+end
+
+local function Touch(req)
+    req.updated = math.max(Now(), (req.updated or 0) + 1)
+    Changed(req)
+end
+
+-- Items arrived (from the mailbox). Spreads `count` over my open requests for
+-- this item, oldest first. Returns how many were counted.
+function Wishlist:AddReceived(itemID, count, sender)
+    local reqs = {}
+    for _, req in ipairs(self:List("mine")) do
+        if req.itemID == itemID then reqs[#reqs + 1] = req end
+    end
+    table.sort(reqs, function(a, b) return a.created < b.created end)
+    local used = 0
+    for _, req in ipairs(reqs) do
+        local take = math.min(count - used, req.qty - (req.received or 0))
+        if take > 0 then
+            req.received = (req.received or 0) + take
+            if sender and sender ~= "" then
+                req.receivedFrom = req.receivedFrom or {}
+                req.receivedFrom[sender] = (req.receivedFrom[sender] or 0) + take
+            end
+            used = used + take
+            Touch(req)
+        end
+        if used >= count then break end
+    end
+    return used
+end
+
+-- Manual correction by the requester ("Got" button).
+function Wishlist:SetReceived(reqId, n)
+    local req = self:Get(reqId)
+    if not req or req.deleted or not self:IsMine(req) then return nil, "Not your request." end
+    n = tonumber(n)
+    if not n or n < 0 then return nil, "Enter a number." end
+    req.received = math.min(math.floor(n), req.qty)
+    Touch(req)
+    return req
+end
+
+function Wishlist:WantsItem(itemID)
+    for _, req in ipairs(self:List("mine")) do
+        if req.itemID == itemID then return true end
+    end
+    return false
 end
 
 ---------------------------------------------------------------------------
@@ -221,9 +304,16 @@ function Wishlist:ClaimsFor(reqId)
     return out
 end
 
+-- A claim minus what that claimer has already delivered.
+function Wishlist:ClaimOutstanding(c)
+    local req = self:Get(c.reqId)
+    local delivered = req and req.receivedFrom and req.receivedFrom[c.claimer] or 0
+    return math.max(0, c.qty - delivered)
+end
+
 function Wishlist:ClaimedTotal(reqId)
     local n = 0
-    for _, c in ipairs(self:ClaimsFor(reqId)) do n = n + c.qty end
+    for _, c in ipairs(self:ClaimsFor(reqId)) do n = n + self:ClaimOutstanding(c) end
     return n
 end
 
@@ -238,7 +328,7 @@ function Wishlist:Unclaimed(req, ignoreMine)
     local claimed = self:ClaimedTotal(req.id)
     if ignoreMine then
         local mine = self:MyClaim(req.id)
-        if mine then claimed = claimed - mine.qty end
+        if mine then claimed = claimed - self:ClaimOutstanding(mine) end
     end
     return math.max(0, req.qty - (req.received or 0) - claimed)
 end
@@ -307,7 +397,8 @@ function Wishlist:Purge()
     if not store then return end
     local cutoff = Now() - self.TOMBSTONE_DAYS * 86400
     for id, req in pairs(store) do
-        if req.deleted and (req.updated or 0) < cutoff then store[id] = nil end
+        -- removed or fulfilled, and untouched for TOMBSTONE_DAYS
+        if not self:IsOpen(req) and (req.updated or 0) < cutoff then store[id] = nil end
     end
     local claims = Claims()
     for id, c in pairs(claims) do

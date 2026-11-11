@@ -178,6 +178,56 @@ local function OpenClaim(req)
     StaticPopup_Show(CLAIM_POPUP, line, nil, { reqId = req.id, default = mine and mine.qty or free })
 end
 
+-- "Got" popup (own requests): fix the received count by hand, e.g. after a trade
+-- or items you gathered yourself. Mail is counted automatically.
+local GOT_POPUP = "UNCSTAVERN_GOT"
+
+local function SubmitGot(popup, reqId)
+    local box = PopupEditBox(popup)
+    local req, err = W:SetReceived(reqId, box and box:GetText())
+    if not req then
+        ns:Print(err)
+    elseif not W:IsOpen(req) then
+        ns:Print("Request complete - removed from the wishlist.")
+    end
+end
+
+StaticPopupDialogs[GOT_POPUP] = {
+    text = "How many have you received so far?\n%s",
+    button1 = "Save",
+    button2 = "Cancel",
+    hasEditBox = true,
+    maxLetters = 4,
+    OnShow = function(self, data)
+        local box = PopupEditBox(self)
+        if box and data then
+            box:SetNumeric(true)
+            box:SetText(tostring(data.default))
+            box:HighlightText()
+            box:SetFocus()
+        end
+    end,
+    OnAccept = function(self, data)
+        if data then SubmitGot(self, data.reqId) end
+    end,
+    EditBoxOnEnterPressed = function(box, data)
+        local popup = box:GetParent()
+        if data then SubmitGot(popup, data.reqId) end
+        popup:Hide()
+    end,
+    EditBoxOnEscapePressed = function(box) box:GetParent():Hide() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+local function OpenGot(req)
+    local name = C_Item.GetItemInfo(req.itemID) or ("item " .. req.itemID)
+    local line = ("%s (wanted %d; reaching %d completes it)"):format(name, req.qty, req.qty)
+    StaticPopup_Show(GOT_POPUP, line, nil, { reqId = req.id, default = req.received or 0 })
+end
+
 ---------------------------------------------------------------------------
 -- List rows
 ---------------------------------------------------------------------------
@@ -200,10 +250,19 @@ local function RowOnEnter(row)
         GameTooltip:AddLine("Being sent by:", 1, 0.82, 0)
         for _, cl in ipairs(claims) do
             local cc = ClassColor(cl.class)
-            GameTooltip:AddDoubleLine("  " .. cl.claimer, cl.qty .. date("   (%b %d %H:%M)", cl.updated),
+            local delivered = cl.qty - W:ClaimOutstanding(cl)
+            local amount = delivered > 0 and ("%d (%d delivered)"):format(cl.qty, delivered) or tostring(cl.qty)
+            GameTooltip:AddDoubleLine("  " .. cl.claimer, amount .. date("   (%b %d %H:%M)", cl.updated),
                 cc.r, cc.g, cc.b, 1, 1, 1)
         end
         GameTooltip:AddLine(("Unclaimed: %d"):format(W:Unclaimed(req)), 0.8, 0.8, 0.8)
+    end
+    if req.receivedFrom and next(req.receivedFrom) then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Received from:", 1, 0.82, 0)
+        for who, n in pairs(req.receivedFrom) do
+            GameTooltip:AddDoubleLine("  " .. who, tostring(n), 1, 1, 1, 1, 1, 1)
+        end
     end
     GameTooltip:AddLine(date("Added %Y-%m-%d %H:%M", req.created), 0.5, 0.5, 0.5)
     GameTooltip:AddLine("Hover the icon for item details", 0.5, 0.5, 0.5)
@@ -246,7 +305,7 @@ local function InitRow(row, entry)
         local actions = COLUMNS[#COLUMNS]
         row.remove = CreateFrame("Button", nil, row, "UIPanelCloseButton")
         row.remove:SetSize(ROW_HEIGHT, ROW_HEIGHT)
-        row.remove:SetPoint("LEFT", row, "LEFT", actions.x + 4, 0)
+        row.remove:SetPoint("LEFT", row, "LEFT", actions.x + 33, 0)
         row.remove:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:AddLine("Remove this request")
@@ -257,6 +316,25 @@ local function InitRow(row, entry)
             local r = self:GetParent().data
             if r then W:Remove(r.id) end
         end)
+
+        row.got = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+        row.got:SetSize(32, ROW_HEIGHT - 4)
+        row.got:SetPoint("LEFT", row, "LEFT", actions.x + 1, 0)
+        row.got:SetNormalFontObject("GameFontNormalSmall")
+        row.got:SetHighlightFontObject("GameFontHighlightSmall")
+        row.got:SetText("Got")
+        row.got:SetScript("OnClick", function(self)
+            local r = self:GetParent().data
+            if r then OpenGot(r) end
+        end)
+        row.got:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine("Received so far")
+            GameTooltip:AddLine("Items taken from the mailbox count automatically. "
+                .. "Use this for trades or items you gathered yourself.", 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        row.got:SetScript("OnLeave", GameTooltip_Hide)
 
         row.claim = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
         row.claim:SetSize(actions.width - 6, ROW_HEIGHT - 4)
@@ -304,8 +382,9 @@ local function InitRow(row, entry)
     cells[5]:SetTextColor(0.8, 0.8, 0.8)
     local claimed = W:ClaimedTotal(req.id)
     local mine = W:MyClaim(req.id)
+    local myOut = mine and W:ClaimOutstanding(mine) or 0
     if mine then
-        cells[6]:SetText(claimed > mine.qty and ("You %d +%d"):format(mine.qty, claimed - mine.qty) or ("You " .. mine.qty))
+        cells[6]:SetText(claimed > myOut and ("You %d +%d"):format(myOut, claimed - myOut) or ("You " .. myOut))
         cells[6]:SetTextColor(0.25, 1, 0.25)
     elseif claimed > 0 then
         cells[6]:SetText(claimed)
@@ -317,6 +396,7 @@ local function InitRow(row, entry)
 
     local isMine = W:IsMine(req)
     row.remove:SetShown(isMine)
+    row.got:SetShown(isMine)
     row.claim:SetShown(not isMine and (mine ~= nil or W:Unclaimed(req) > 0))
     row.claim:SetText(mine and "Edit" or "Claim")
 end

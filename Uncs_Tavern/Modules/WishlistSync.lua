@@ -1,7 +1,8 @@
 -- Modules\WishlistSync.lua: spreads wishlist requests across the guild over Comm.
 --
 -- Messages (protocol 1, see Comm.lua for the envelope):
---   R  |requester|class|itemID|qty|received|price|created|rand|updated|deleted|note
+--   R  |requester|class|itemID|qty|received|price|created|rand|updated|deleted|note|from
+--        from = "Name:5,Other:3" (who delivered; added after note so older copies ignore it)
 --        one request. id is rebuilt as "requester:created:rand". Sent live whenever
 --        you add/remove a request, and during catch-up.
 --   C  |requester|created|rand|claimer|class|qty|updated|deleted
@@ -32,7 +33,8 @@ local OWN_PUSH_DAYS = 2    -- on login, re-send own requests changed in this win
 local function SendRecord(req)
     local rand = req.id:match(":(%d+)$") or "0"
     Comm:Send("R", req.requester, req.class or "", req.itemID, req.qty, req.received or 0,
-        req.price or 0, req.created, rand, req.updated, req.deleted and 1 or 0, req.note or "")
+        req.price or 0, req.created, rand, req.updated, req.deleted and 1 or 0, req.note or "",
+        W:EncodeFrom(req.receivedFrom))
 end
 
 local function SendClaim(c)
@@ -53,7 +55,7 @@ local function DecodeClaim(requester, created, rand, claimer, class, qty, update
     }
 end
 
-local function DecodeRecord(requester, class, itemID, qty, received, price, created, rand, updated, deleted, note)
+local function DecodeRecord(requester, class, itemID, qty, received, price, created, rand, updated, deleted, note, from)
     created = tonumber(created)
     if not requester or not created or not tonumber(rand) then return nil end
     return {
@@ -68,6 +70,7 @@ local function DecodeRecord(requester, class, itemID, qty, received, price, crea
         updated = tonumber(updated),
         deleted = deleted == "1",
         note = note or "",
+        receivedFrom = W:DecodeFrom(from),
     }
 end
 
