@@ -34,11 +34,7 @@ local newerVersionWarned = false
 ---------------------------------------------------------------------------
 -- Storage: ns.db.roster[guildKey].users[name] = { version, seen }
 ---------------------------------------------------------------------------
-local function GuildKey()
-    local guild = IsInGuild() and GetGuildInfo("player")
-    if not guild then return nil end
-    return guild .. "@" .. (GetRealmName() or "")
-end
+local function GuildKey() return ns:GuildKey() end
 
 local function Users()
     local key = GuildKey()

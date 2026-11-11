@@ -39,6 +39,18 @@ function ns:PlayerName()
     return first
 end
 
+-- Key for per-guild data ("Guild Name@Realm"), or nil when not in a guild.
+-- The guild is detected at runtime; nothing is hardcoded.
+function ns:GuildKey()
+    local guild = IsInGuild() and GetGuildInfo("player")
+    if not guild then return nil end
+    return guild .. "@" .. (GetRealmName() or "")
+end
+
+function ns:PlayerClass()
+    return UnitClassBase and UnitClassBase("player") or select(2, UnitClass("player"))
+end
+
 ---------------------------------------------------------------------------
 -- Events: one frame, many handlers. Modules call ns:RegisterEvent(event, fn).
 ---------------------------------------------------------------------------

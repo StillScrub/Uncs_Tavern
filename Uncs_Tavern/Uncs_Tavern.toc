@@ -11,6 +11,7 @@ Comm.lua
 UI\MainFrame.lua
 
 Modules\Roster.lua
+Modules\WishlistData.lua
 Modules\Wishlist.lua
 Modules\Settings.lua
 Modules\LevelUp.lua
