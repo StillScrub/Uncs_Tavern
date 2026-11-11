@@ -8,7 +8,7 @@ local MainFrame = {}
 ns.MainFrame = MainFrame
 
 local FRAME_NAME = "UncsTavernMainFrame"
-local ICON       = "Interface\\Icons\\INV_Drink_05"
+local ICON       = "Interface\\AddOns\\Uncs_Tavern\\Media\\Icon"
 local WIDTH, HEIGHT = 700, 480
 
 local tabs = {}   -- { key, label, order, build, panel }
