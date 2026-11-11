@@ -21,6 +21,19 @@ function ns:Print(...)
 end
 
 ---------------------------------------------------------------------------
+-- Player name. Forever characters have two names ("Hexual Defect"):
+-- UnitName returns them as two values, GetUnitName(unit, true) joins them
+-- with a space, and the guild roster uses the joined form.
+---------------------------------------------------------------------------
+function ns:PlayerName()
+    local full = GetUnitName and GetUnitName("player", true)
+    if full and full ~= "" then return full end
+    local first, second = UnitName("player")
+    if second and second ~= "" then return first .. " " .. second end
+    return first
+end
+
+---------------------------------------------------------------------------
 -- Events: one frame, many handlers. Modules call ns:RegisterEvent(event, fn).
 ---------------------------------------------------------------------------
 local eventFrame = CreateFrame("Frame")
@@ -51,8 +64,11 @@ end
 eventFrame:SetScript("OnEvent", function(_, event, ...)
     local list = handlers[event]
     if not list then return end
-    for i = 1, #list do
-        list[i](event, ...)
+    -- Snapshot, so a handler can unregister itself (or others) mid-dispatch safely.
+    local n = #list
+    local snapshot = { unpack(list, 1, n) }
+    for i = 1, n do
+        snapshot[i](event, ...)
     end
 end)
 
