@@ -15,17 +15,24 @@ A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but
 - Bottom tabs: **[Guild name, read live] · Wishlist · Settings**.
 
 ## 1. Guild tab (roster)
-- Columns: class icon + character name in class color · Level · Zone/Status (zone, or "Offline Xh") · Rank · PvP Kills · PvP Deaths · K/D.
-- Members without the addon (or until PvP stats exists) show "—" for PvP stats.
+- Columns: class icon + character name in class color · Level · Zone/Status (zone, or "Offline Xh") · Rank · PvP Kills · PvP Deaths · K/D · Dishonorable (kills; not part of K/D).
+- Members without the addon show "—" for PvP stats. Hovering a row adds a PvP breakdown (see 2).
 - Click a column header to sort. "Show offline" checkbox, name search box.
 - Footer: "X of Y online · Z using Unc's Tavern", and a Sync button (our own addon messages only).
 - Hovering a row shows the public note.
 - Refreshes on GUILD_ROSTER_UPDATE, throttled. No polling. No right-click menu and no Blizzard actions.
 
 ## 2. PvP stats (feeds the roster)
-- Each player's addon tracks their own PvP kills and deaths and shares them over guild addon messages.
-- `/tavern pvptest` probes what Forever exposes. First results: statistic 588 (Total Honorable Kills) and 1501 (Total deaths from other players) exist; whether they update live still needs an in-game kill/death test.
-- If deaths can't be separated from PvE deaths, ship kills only and hide Deaths and K/D.
+- Each player's addon tracks their own PvP stats and shares them over guild addon messages (`1|P|...`, throttled: ~15 s after login, at most once a minute after changes, soon after Sync or a new addon user). Event-driven only; no combat log.
+- **Kills** = honorable kills, lifetime (includes assists): the higher of GetPVPLifetimeStats and statistic 588, read on PLAYER_PVP_KILLS_CHANGED.
+- **Killing blows on players** (since install): PARTY_KILL by me or my pet on a player GUID.
+- **Dishonorable kills** (since install): a killing blow on a player with no honor signal (PLAYER_PVP_KILLS_CHANGED / CHAT_MSG_COMBAT_HONOR_GAIN) within 1.5 s, i.e. the victim was too low level to give honor. Assists without honor can't be seen. Own roster column, not part of K/D.
+- **Deaths** = deaths to players: statistic 1501 (lifetime) when the game fills it, otherwise counted since install. On PLAYER_DEAD, wait 4 s (ignores Feign Death), then read the death recap: killing blow from a player or player's pet = PvP death; mobs, environment and duel deaths are ignored.
+- **Dishonorable deaths** (since install): a PvP death where I was grey to the killer (classic grey-level rule; skull = always). The recap has no levels, so at PLAYER_DEAD the levels of visible enemy players (target, focus, mouseover, nameplates) are noted and matched to the killer's GUID. Unknown level = not counted.
+- **K/D** = Kills / max(Deaths, 1).
+- **Killers:** deaths per killer are saved; "Most killed by" is shared and shown in the roster tooltip. **Farming warning** (Settings, on by default): chat warning when the same player kills you 3 times within 30 minutes.
+- Roster tooltip: honorable kills, dishonorable kills, killing blows, deaths, dishonorable deaths, most killed by.
+- `/tavern pvpdebug` prints every source value and the last kill/death signal for in-game checks.
 
 ## 3. Wishlist tab
 - **Add a request:** drag an item from bags into the item slot (shift-click was dropped: on stacks it opens the split-stack box). Planned: a search box over a built-in list of common mats/leveling items plus cached items. Fields: quantity, note, payment.
@@ -54,7 +61,7 @@ A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but
 - Only players with the addon post their own level-ups.
 
 ## 7. Settings tab
-- Toggles: level-up posts, minimap button. Planned: vendor/AH/mail popup, tooltip lines.
+- Toggles: level-up posts, farming warning, minimap button. Planned: vendor/AH/mail popup, tooltip lines.
 
 ## Out of scope
 - Gear upgrade detection (dropped).

@@ -7,7 +7,8 @@
 -- is visible; otherwise it just marks itself dirty and rebuilds on next show.
 --
 -- Optional providers other modules can set later (no edits needed here):
---   ns.PvPStats:Get(fullName) -> kills, deaths   (nil = member has no data)
+--   ns.PvPStats:Get(fullName) -> kills, deaths, dishonorableKills   (nil = member has no data)
+--   ns.PvPStats:AddTooltip(tooltip, fullName)     extra row-tooltip lines
 --   ns.Comm:CountAddonUsers() -> number
 local _, ns = ...
 
@@ -19,11 +20,16 @@ local THROTTLE   = 2 -- seconds between roster rebuilds
 local COLUMNS = {
     { key = "name",   label = "Name",          width = 175 },
     { key = "level",  label = "Level",         width = 42,  justify = "CENTER" },
-    { key = "zone",   label = "Zone / Status", width = 170 },
-    { key = "rank",   label = "Rank",          width = 115 },
-    { key = "kills",  label = "Kills",         width = 52,  justify = "CENTER" },
-    { key = "deaths", label = "Deaths",        width = 52,  justify = "CENTER" },
-    { key = "kd",     label = "K/D",           width = 48,  justify = "CENTER" },
+    { key = "zone",   label = "Zone / Status", width = 150 },
+    { key = "rank",   label = "Rank",          width = 105 },
+    { key = "kills",  label = "Kills",         width = 52,  justify = "CENTER",
+      tip = "Honorable kills, lifetime (includes assists)." },
+    { key = "deaths", label = "Deaths",        width = 52,  justify = "CENTER",
+      tip = "Deaths to players. Lifetime when the game tracks it; otherwise deaths tracked since installing Unc's Tavern." },
+    { key = "kd",     label = "K/D",           width = 48,  justify = "CENTER",
+      tip = "Kills / Deaths (deaths count as at least 1)." },
+    { key = "dk",     label = "Dishonorable",  width = 80,  justify = "CENTER",
+      tip = "Killing blows on players too low level to give honor, since installing Unc's Tavern. Not part of K/D." },
 }
 do
     local x = 0
@@ -110,9 +116,9 @@ local function ReadRoster()
                 m.zoneText = isMobile and "Remote Chat" or OfflineText(m.offlineMins)
             end
             if pvp and pvp.Get then
-                m.kills, m.deaths = pvp:Get(full)
+                m.kills, m.deaths, m.dk = pvp:Get(full)
                 if m.kills and m.deaths then
-                    m.kd = (m.deaths > 0) and (m.kills / m.deaths) or m.kills
+                    m.kd = m.kills / math.max(m.deaths, 1)
                 end
             end
             members[#members + 1] = m
@@ -129,6 +135,7 @@ local SORTERS = {
     kills  = function(m) return m.kills end,
     deaths = function(m) return m.deaths end,
     kd     = function(m) return m.kd end,
+    dk     = function(m) return m.dk end,
 }
 
 local function Sorted(list)
@@ -162,6 +169,7 @@ local function RowOnEnter(row)
     else
         GameTooltip:AddLine("No public note", 0.5, 0.5, 0.5)
     end
+    if ns.PvPStats and ns.PvPStats.AddTooltip then ns.PvPStats:AddTooltip(GameTooltip, m.full) end
     GameTooltip:Show()
 end
 
@@ -201,6 +209,7 @@ local function InitRow(row, m)
     cells[5]:SetText(m.kills or DASH)
     cells[6]:SetText(m.deaths or DASH)
     cells[7]:SetText(m.kd and ("%.2f"):format(m.kd) or DASH)
+    cells[8]:SetText(m.dk or DASH)
 
     local grey = not m.online
     for i = 2, #cells do
@@ -345,6 +354,15 @@ local function Build(p)
         h.arrow:SetTexture("Interface\\Buttons\\UI-SortArrow")
         h.arrow:SetSize(9, 8)
         h.arrow:SetPoint("RIGHT", h, "RIGHT", -2, 0)
+        if col.tip then
+            h:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                GameTooltip:AddLine(col.label)
+                GameTooltip:AddLine(col.tip, 1, 1, 1, true)
+                GameTooltip:Show()
+            end)
+            h:SetScript("OnLeave", GameTooltip_Hide)
+        end
         h:SetScript("OnClick", function(self)
             local pr = Prefs()
             if pr.sortKey == self.key then
@@ -402,6 +420,7 @@ local function Build(p)
     ns:RegisterEvent("GUILD_ROSTER_UPDATE", OnRosterEvent)
     ns:RegisterEvent("PLAYER_GUILD_UPDATE", OnRosterEvent)
     ns:RegisterCallback("ADDON_USERS_CHANGED", OnRosterEvent)
+    ns:RegisterCallback("PVP_STATS_CHANGED", OnRosterEvent)
 
     panel:SetScript("OnShow", function()
         RequestRoster()

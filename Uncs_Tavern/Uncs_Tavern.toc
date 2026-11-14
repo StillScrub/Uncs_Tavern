@@ -18,4 +18,4 @@ Modules\AutoComplete.lua
 Modules\Settings.lua
 Modules\LevelUp.lua
 Modules\MinimapButton.lua
-Modules\PvPTest.lua
+Modules\PvPStats.lua

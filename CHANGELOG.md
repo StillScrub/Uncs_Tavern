@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **PvP stats** on the guild tab, shared over guild sync: Kills (lifetime honorable kills, incl. assists), Deaths (deaths to players: lifetime when the game tracks it, otherwise since install) K/D, and a Dishonorable column (kills on players too low level to give honor; not part of K/D). Hover a member for killing blows on players, dishonorable deaths (killed by someone you were grey to, when their level was visible) and "Most killed by".
+- **Farming warning:** chat warning when the same player kills you 3 times within 30 minutes (Settings toggle).
+- `/tavern pvpdebug` shows your PvP numbers, their sources and the last kill/death signal.
+
+### Removed
+- `/tavern pvptest` (replaced by `/tavern pvpdebug`).
+
 ### Changed
 - Unc's Tavern now swaps with the Guild & Communities window (J): click the Unc's Tavern icon inside the window's portrait (top-left) and the guild window is replaced by the Unc's Tavern window in the same spot; the icon in its corner swaps back.
 - The first tab is now labelled with your guild's name (read live); tabs are [Guild name] · Wishlist · Settings.

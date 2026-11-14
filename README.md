@@ -26,6 +26,8 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 - Click a column header to sort, search by name, and toggle "Show offline" (remembered per character).
 - Hover a member to see their level, class, rank and public note.
 - Footer: "X of Y online · Z using Unc's Tavern".
+- **PvP stats** for members running the addon: Kills (lifetime honorable kills), Deaths (deaths to players), K/D, and Dishonorable kills (players too low level to give honor; not part of K/D). Hover a member for killing blows, dishonorable deaths and who has killed them most.
+- **Farming warning:** a chat warning when the same player kills you 3 times within 30 minutes.
 - **Sync** button to ask everyone running the addon to check in again.
 
 **Wishlist tab**
@@ -42,7 +44,7 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 
 **Minimap button & Settings**
 - Minimap button: left-click opens or closes Unc's Tavern (swapping with the guild window if it's open), right-click opens its Settings; drag to move.
-- Settings tab with toggles for level-up posts and the minimap button.
+- Settings tab with toggles for level-up posts, the farming warning and the minimap button.
 
 ## Screenshots
 
@@ -74,14 +76,13 @@ To update, delete the old `Uncs_Tavern` folder and extract the new zip the same 
 | `/tavern wishlist` | Show wishlist sync status |
 | `/tavern levelup` | Preview your level-up line (sends nothing) |
 | `/tavern levelup popup` | Show the level-up popup now |
-| `/tavern pvptest` | Diagnostic: print what PvP data the client exposes (`pvptest listen` logs live PvP events) |
+| `/tavern pvpdebug` | Print your PvP numbers, where they come from, and the last kill/death signal |
 
 The minimap button works like `/tavern` (right-click opens the Settings tab).
 
 ## Roadmap
 
 Coming soon:
-- **PvP stats** on the roster: Kills, Deaths and K/D shared over guild sync.
 - **Wishlist item search** and **rule requests** (e.g. Cloth, level 26+, 4+ Intellect).
 - **Bag tooltips:** "Wanted by &lt;name&gt;: N more · price" on wanted items.
 - **Vendor / auction house / mailbox popup:** "N items in your bags are on the guild wishlist".

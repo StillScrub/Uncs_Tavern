@@ -110,7 +110,7 @@ end
 -- Saved variables (with dbVersion + migrations)
 ---------------------------------------------------------------------------
 local DB_VERSION      = 1
-local CHAR_DB_VERSION = 1
+local CHAR_DB_VERSION = 2
 
 local DEFAULTS = {
     settings = {
@@ -118,16 +118,30 @@ local DEFAULTS = {
         vendorPopup   = true,
         tooltipLines  = true,
         minimapButton = true,
+        farmWarning   = true,
     },
     wishlist = {},
     roster   = {},
+    pvp      = {}, -- [guildKey][name] = guildmates' shared PvP stats
 }
 
-local CHAR_DEFAULTS = {}
+local CHAR_DEFAULTS = {
+    -- My own PvP tracking (Modules\PvPStats.lua). Lifetime honorable kills come from the game.
+    pvp = { deaths = 0, dishonorableKills = 0, dishonorableDeaths = 0, killingBlows = 0, killers = {} },
+}
 
 -- MIGRATIONS[n] upgrades a db from version n-1 to n.
 local MIGRATIONS      = {}
-local CHAR_MIGRATIONS = {}
+local CHAR_MIGRATIONS = {
+    -- 2: "no-honor kills" renamed to "dishonorable kills".
+    [2] = function(db)
+        local p = db.pvp
+        if p and p.noHonorKills then
+            p.dishonorableKills = (p.dishonorableKills or 0) + p.noHonorKills
+            p.noHonorKills = nil
+        end
+    end,
+}
 
 local function ApplyDefaults(db, defaults)
     for k, v in pairs(defaults) do
