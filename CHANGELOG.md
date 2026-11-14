@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Unc's Tavern now swaps with the Guild & Communities window (J): click the Unc's Tavern icon inside the window's portrait (top-left) and the guild window is replaced by the Unc's Tavern window in the same spot; the icon in its corner swaps back.
+- The first tab is now labelled with your guild's name (read live); tabs are [Guild name] · Wishlist · Settings.
+- `/tavern` and the minimap button swap with the guild window when it's open, otherwise open or close Unc's Tavern where the guild window last was.
+- The window opens on the guild tab, can be dragged and resized, and has a button next to the X that resets it to the guild window's size and position. The icon is hidden when you have no guild.
+
 ## [0.1.0] - 2026-11-14
 
 First release.

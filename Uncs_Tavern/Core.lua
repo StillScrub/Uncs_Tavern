@@ -183,7 +183,7 @@ end
 
 local function PrintHelp()
     ns:Print("v" .. ns.version .. " commands:")
-    DEFAULT_CHAT_FRAME:AddMessage("  /tavern - open or close the window")
+    DEFAULT_CHAT_FRAME:AddMessage("  /tavern - open or close Unc's Tavern (swaps with the guild window if open)")
     for _, name in ipairs(commandOrder) do
         local help = commands[name].help
         DEFAULT_CHAT_FRAME:AddMessage("  /tavern " .. name .. (help and (" - " .. help) or ""))

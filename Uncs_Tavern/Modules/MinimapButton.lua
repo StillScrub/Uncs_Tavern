@@ -1,5 +1,6 @@
 -- Modules\MinimapButton.lua: minimap button.
---   Left-click: open/close the window.  Right-click: open Settings.  Drag: move around the minimap.
+--   Left-click: open/close Unc's Tavern (swapping with the guild window if it's open).
+--   Right-click: its Settings tab.  Drag: move around the minimap.
 -- Position (angle) and visibility are saved account-wide in ns.db.settings.
 -- An OnUpdate script runs only while the button is being dragged, to follow the cursor;
 -- it is removed on release.
@@ -28,7 +29,7 @@ end
 local function OnEnter(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:AddLine(ns.title)
-    GameTooltip:AddLine("|cffffffffLeft-click:|r open / close", 0.8, 0.8, 0.8)
+    GameTooltip:AddLine("|cffffffffLeft-click:|r open or close Unc's Tavern", 0.8, 0.8, 0.8)
     GameTooltip:AddLine("|cffffffffRight-click:|r settings", 0.8, 0.8, 0.8)
     GameTooltip:AddLine("|cffffffffDrag:|r move", 0.8, 0.8, 0.8)
     GameTooltip:Show()
@@ -98,7 +99,7 @@ ns:RegisterEvent("PLAYER_LOGIN", UpdateVisibility)
 ns.Settings:RegisterToggle({
     key = "minimapButton",
     label = "Show minimap button",
-    description = "Left-click opens the window, right-click opens Settings, drag to move it.",
+    description = "Left-click opens or closes Unc's Tavern, right-click opens its Settings. Drag to move.",
     order = 90,
     onChange = UpdateVisibility,
 })

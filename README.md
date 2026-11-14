@@ -1,6 +1,6 @@
 # Unc's Tavern
 
-A guild hub addon for **&lt;Unc of Azeroth&gt;** on World of Warcraft: Forever.
+A guild hub addon for **&lt;Unc of Azeroth&gt;** on World of Warcraft: Forever. It adds a toggleable Unc's Tavern view to the Guild & Communities window (J).
 
 [![Latest release](https://img.shields.io/github/v/release/StillScrub/Uncs_Tavern?label=release)](https://github.com/StillScrub/Uncs_Tavern/releases/latest)
 [![Game version](https://img.shields.io/badge/WoW-Forever%20(16001)-c69b3a)](#installation)
@@ -12,11 +12,19 @@ A guild hub addon for **&lt;Unc of Azeroth&gt;** on World of Warcraft: Forever.
 
 ## Features
 
+Press **J** to open Blizzard's normal guild window, then click the **Unc's Tavern icon in the top-left corner** (over the portrait) to swap to the Unc's Tavern window in the same spot. Click the icon in its corner to swap back. Guild chat and everything else in Blizzard's window stays exactly as it is.
+
 The guild is detected automatically, so the addon works for any guild. Everything is event-driven and stays out of combat and protected actions: the addon fills things in, and you press the final button.
 
-**Roster tab**
+**Guild window swap**
+- The Unc's Tavern icon sits inside the guild window's portrait; it is the only change to Blizzard's UI.
+- Clicking it closes the guild window and opens the Unc's Tavern window in the same spot, with bottom tabs **[your guild's name] · Wishlist · Settings**. The icon in its corner swaps back.
+- Drag the window to move it, resize it from the bottom-right corner, or reset it to the guild window's size with the button next to the X. It opens on the guild tab. No guild: no icon.
+
+**Guild tab (roster)**
 - Every guild member with class-colored name, level, class, and zone (or how long they've been offline).
 - Click a column header to sort, search by name, and toggle "Show offline" (remembered per character).
+- Hover a member to see their rank and public note.
 - Footer shows member, online, and Unc's Tavern user counts.
 - **Sync** button to ask everyone running the addon to check in again.
 
@@ -33,14 +41,14 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 - Link your Battle.net account to Discord so your posts reach the guild Discord.
 
 **Minimap button & Settings**
-- Minimap button: left-click opens the window, right-click opens Settings, drag to move.
+- Minimap button: left-click opens or closes Unc's Tavern (swapping with the guild window if it's open), right-click opens its Settings; drag to move.
 - Settings tab with toggles for level-up posts and the minimap button.
 
 ## Screenshots
 
-| Roster | Wishlist | Settings |
+| Guild tab | Wishlist | Settings |
 |---|---|---|
-| ![Roster](docs/screenshots/roster.png) | ![Wishlist](docs/screenshots/wishlist.png) | ![Settings](docs/screenshots/settings.png) |
+| ![Guild tab](docs/screenshots/guild.png) | ![Wishlist](docs/screenshots/wishlist.png) | ![Settings](docs/screenshots/settings.png) |
 
 ## Installation
 
@@ -55,9 +63,12 @@ To update, delete the old `Uncs_Tavern` folder and extract the new zip the same 
 
 ## Usage
 
+1. Press **J** to open the Guild & Communities window.
+2. Click the **Unc's Tavern icon** in the top-left corner to swap to the Unc's Tavern window; click the icon in its corner to swap back.
+
 | Command | What it does |
 |---|---|
-| `/tavern` | Open or close the window |
+| `/tavern` | Open or close Unc's Tavern (swaps with the guild window if it's open) |
 | `/tavern help` | List all commands |
 | `/tavern sync` | Show who in the guild runs the addon |
 | `/tavern wishlist` | Show wishlist sync status |
@@ -65,17 +76,17 @@ To update, delete the old `Uncs_Tavern` folder and extract the new zip the same 
 | `/tavern levelup popup` | Show the level-up popup now |
 | `/tavern pvptest` | Diagnostic: print what PvP data the client exposes (`pvptest listen` logs live PvP events) |
 
-You can also open the window from the minimap button.
+The minimap button works like `/tavern` (right-click opens the Settings tab).
 
 ## Roadmap
 
 Coming soon:
+- **Guild tab roster columns:** class icons and a Rank column, with a tidier footer.
 - **PvP stats** on the roster: Kills, Deaths and K/D shared over guild sync.
 - **Wishlist item search** and **rule requests** (e.g. Cloth, level 26+, 4+ Intellect).
 - **Bag tooltips:** "Wanted by &lt;name&gt;: N more · price" on wanted items.
 - **Vendor / auction house / mailbox popup:** "N items in your bags are on the guild wishlist".
 - **Mailbox "Guild Requests" tab:** pick a request and get a ready-to-send mail draft (recipient, items, COD).
-- **Discord bot:** reads the level-up lines and updates a daily leaderboard.
 
 ## Reporting bugs
 

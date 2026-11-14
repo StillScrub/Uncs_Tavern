@@ -28,10 +28,20 @@ Read SPEC.md for features. This file is how to build them.
 - `Uncs_Tavern.toc` — load order
 - `Core.lua` — namespace, events, saved variables, slash command `/tavern`
 - `Comm.lua` — guild addon messaging + sync (merge by timestamp)
-- `UI\MainFrame.lua` — window + bottom tabs (Roster, Wishlist, Settings); each tab is a module
+- `UI\MainFrame.lua` — the Unc's Tavern window, swapped with the guild window (J) via the portrait icon; bottom tabs ([Guild name], Wishlist, Settings); each tab is a module
 - `Modules\Roster.lua`, `Modules\Wishlist.lua`, `Modules\Mail.lua`, `Modules\Alerts.lua`, `Modules\LevelUp.lua`, `Modules\PvPStats.lua`
 - `Media\` — icon (.tga)
 - New features = new file in `Modules\` registering a tab or hooks. Don't edit other modules to add one.
+
+## Guild window integration
+- J opens Blizzard's Guild & Communities window as normal. Our icon sits inside its portrait (top-left), with the window's own ring art drawn over it so it looks built in.
+- Clicking it swaps windows: the guild window closes (HideUIPanel) and our own standalone window opens at the same top-left (at the guild window's size, at least its large width, unless the player resized ours). Our window has the same icon in its portrait; clicking it closes ours and reopens the guild window (ShowUIPanel) at our window's top-left. Only one is open at a time, and it opens on the guild tab.
+- Our window can be dragged, resized (grip bottom-right) and reset to the guild window's size/position (button next to the X).
+- That swap is the only thing we do to Blizzard's UI: our button parented to CommunitiesFrame, HideUIPanel/ShowUIPanel(CommunitiesFrame) on the player's click, placing its top-left where ours was, and HookScript OnShow. Never call or hook any other Blizzard function, and never resize, maximize, minimize or switch Blizzard's window, its frames or its tabs. (Blizzard templates and helper functions used on OUR OWN frames are fine.)
+- /tavern and the minimap button: guild window open -> swap to ours; ours open -> close it; neither -> open ours where the guild window last was. They never open Blizzard's window on their own.
+- Swapping works in combat too (none of these frames are protected).
+- If the player has no guild, hide the portrait icon.
+- After every UI phase, check that inviting someone to the guild still works in Blizzard's view (taint check).
 
 ## SavedVariables
 - `UncsTavernDB` (account-wide): wishlist, roster cache, settings.

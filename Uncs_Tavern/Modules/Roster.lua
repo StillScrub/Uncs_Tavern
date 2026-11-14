@@ -378,4 +378,5 @@ local function Build(p)
     Rebuild()
 end
 
-ns.MainFrame:RegisterTab("roster", "Roster", 10, Build)
+-- The first tab is labelled with the guild name, read live.
+ns.MainFrame:RegisterTab("roster", function() return (IsInGuild() and GetGuildInfo("player")) or "Guild" end, 10, Build)

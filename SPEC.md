@@ -1,54 +1,63 @@
-# Unc's Tavern — v1 spec
+# Unc's Tavern — spec
 
-A guild hub for <Unc of Azeroth>. Small, Blizzard-native window opened from a minimap button or `/tavern`.
-Tabs along the bottom: **Roster · Wishlist · Settings**. Visual reference: the mockup canvas (Roster, Wishlist, Mailbox, Alerts screens).
+A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but working for any guild: the guild is read at runtime, never hardcoded.
 
-## 1. Roster (home tab)
-- Every guild member from the guild roster: name (class-colored), level, class, online status + zone (or "Offline Xh").
-- PvP columns: **Kills, Deaths, K/D**. Members without the addon show "—".
+## 0. Where it lives: the guild window (J)
+- Pressing **J** opens Blizzard's normal Guild & Communities window, unchanged.
+- Our **icon sits inside the window's portrait** (top-left), under the window's own ring art, so it looks built in.
+- Click it: the guild window closes and the **Unc's Tavern window** opens in the same spot with the same size (at least the large guild window's width, since our content doesn't fit the small mode), on the guild tab. Our window has the same icon in its portrait: click it to close ours and reopen the guild window where ours was. Only one is open at a time; pressing J while ours is open closes ours.
+- Our window can be dragged and resized (grip, bottom-right). A button next to the X resets it to the guild window's size and position. Once resized, it keeps its size until reset.
+- Blizzard's window, its mode (small/large) and its tabs are never changed; we only close and reopen it on the player's click, at our window's position.
+- Swapping works in combat too.
+- No guild: the icon is hidden.
+- `/tavern` and the minimap button: guild window open -> swap to ours; ours open -> close it; neither -> open ours where the guild window last was.
+- Guild chat stays in Blizzard's window. There is no chat tab.
+- Bottom tabs: **[Guild name, read live] · Wishlist · Settings**.
+
+## 1. Guild tab (roster)
+- Columns: class icon + character name in class color · Level · Zone/Status (zone, or "Offline Xh") · Rank · PvP Kills · PvP Deaths · K/D.
+- Members without the addon (or until PvP stats exists) show "—" for PvP stats.
 - Click a column header to sort. "Show offline" checkbox, name search box.
-- Footer: how many members have the addon installed.
+- Footer: "X of Y online · Z using Unc's Tavern", and a Sync button (our own addon messages only).
+- Hovering a row shows the public note.
+- Refreshes on GUILD_ROSTER_UPDATE, throttled. No polling. No right-click menu and no Blizzard actions.
 
 ## 2. PvP stats (feeds the roster)
 - Each player's addon tracks their own PvP kills and deaths and shares them over guild addon messages.
-- **Step 0 — test first:** build a tiny test command (`/tavern pvptest`) that prints what Forever exposes:
-  1. Character statistics (honorable kills, deaths from other players) via GetStatistic, if available.
-  2. Honorable kill counters / PvP kill events.
-  3. Death recap info about who killed the player.
-  Choose the approach based on the results. If deaths can't be separated from PvE deaths, ship kills only and hide Deaths and K/D.
+- `/tavern pvptest` probes what Forever exposes. First results: statistic 588 (Total Honorable Kills) and 1501 (Total deaths from other players) exist; whether they update live still needs an in-game kill/death test.
+- If deaths can't be separated from PvE deaths, ship kills only and hide Deaths and K/D.
 
 ## 3. Wishlist tab
-- **Add a request:** shift-click an item from bags into the item slot, or type in a search box (searches a built-in list of common mats/leveling items plus any item the client has cached). Fields: quantity, note, payment.
+- **Add a request:** drag an item from bags into the item slot (shift-click was dropped: on stacks it opens the split-stack box). Planned: a search box over a built-in list of common mats/leveling items plus cached items. Fields: quantity, note, payment.
 - **Payment:** Gift, or "Pay up to X per item" (gold/silver/copper).
-- **Rule requests (simple):** armor type + minimum required level + minimum of one stat (e.g. Cloth, 26+, 4+ Intellect).
-- **List:** item (quality-colored), progress (8 / 20), requester (class-colored), payment, claim status. Filters: All / Mats / Gear / Mine.
-- **Claim:** "I'm sending N" marks it so others don't double-send.
-- **Auto-complete:** when the requester receives the items (mail/bags), the count goes down; done requests are removed.
+- **Rule requests (planned):** armor type + minimum required level + minimum of one stat (e.g. Cloth, 26+, 4+ Intellect).
+- **List:** item (quality-colored), progress (8 / 20), requester (class-colored), payment, note, claims. Filters: All / Mats / Gear / Mine, plus "Hide mine".
+- **Claim:** "I'm sending N" marks it so others don't double-send. Claims lapse after 72 hours.
+- **Auto-complete:** items the requester takes from the mailbox count toward the request; "Got" corrects counts by hand; done requests are removed.
 - Requests sync across the guild; online members pass them along so requests spread while the requester is offline.
 
-## 4. Alerts
+## 4. Alerts (planned)
 - **Bag tooltip:** extra lines on wanted items — "Wanted by <name>: N more · price".
 - **Popup on opening a vendor, auction house or mailbox:** "N items in your bags are on the guild wishlist" with Show me / Not now. Never blocks selling.
-- **Minimap button:** click opens the window, right-click opens settings, badge when new requests arrive.
+- **Minimap button:** badge when new requests arrive.
 
-## 5. Mailbox "Guild Requests" tab
+## 5. Mailbox "Guild Requests" tab (planned)
 - New tab next to Inbox / Send Mail.
 - Lists only requests the player can fill from their bags.
 - Picking one shows a draft: recipient, subject ("Unc's Tavern: Item ×N"), items attached, COD pre-filled as quantity × requester's price (or Gift). Everything is editable.
 - "Fill Send Mail" fills the real Send Mail form. The player presses Send.
 
 ## 6. Level-up post
-- On level-up, post to guild chat: `[Unc's Tavern] <Name> reached level <N>!`
+- On level-up (after combat), a popup offers to post to guild chat: `[Unc's Tavern] <Name> reached level <N>!` The player clicks **Post** — WoW: Forever only lets addons post to chat on a click.
 - On by default; can be turned off in Settings.
-- This line is parsed by the guild's Discord bot (via the in-game guild chat <-> Discord link), so keep the format exactly stable.
-- v1: only players with the addon post their own level-ups.
+- The guild's Discord side may parse this line, so keep the format exactly stable.
+- Only players with the addon post their own level-ups.
 
 ## 7. Settings tab
-- Toggles: level-up posts, vendor/AH/mail popup, tooltip lines, minimap button.
+- Toggles: level-up posts, minimap button. Planned: vendor/AH/mail popup, tooltip lines.
 
-## Out of scope for v1
+## Out of scope
 - Gear upgrade detection (dropped).
+- Info/events board, RSVPs, Notes tab and any Discord integration inside the addon (Discord is handled separately, outside the game).
+- Officer actions (promote, demote, remove) and anything that drives Blizzard's guild window.
 - Announcing level-ups for members without the addon (maybe later).
-
-## Later (separate project)
-- Discord bot (runs on a NAS): read `[Unc's Tavern]` lines from the bridged guild chat channel and update the daily leaderboard in the Tavern Bulletin channel.
