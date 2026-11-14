@@ -7,9 +7,8 @@ ns.name    = ADDON_NAME
 ns.title   = "Unc's Tavern"
 ns.version = (GetMeta and GetMeta(ADDON_NAME, "Version")) or "dev"
 
--- Shown in Roster and Settings: the guild chat <-> Discord bridge only carries
--- messages from players whose Battle.net account is linked to Discord.
-ns.DISCORD_NOTE_SHORT = "Link Battle.net to Discord so your level-ups reach Discord."
+-- Shown in Settings and the level-up popup: the guild chat <-> Discord bridge only
+-- carries messages from players whose Battle.net account is linked to Discord.
 ns.DISCORD_NOTE = "|cffffd100Discord:|r your level-up posts only reach the guild Discord (and the bot only "
     .. "updates) if your Battle.net account is linked to Discord."
 

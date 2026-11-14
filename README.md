@@ -22,10 +22,10 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 - Drag the window to move it, resize it from the bottom-right corner, or reset it to the guild window's size with the button next to the X. It opens on the guild tab. No guild: no icon.
 
 **Guild tab (roster)**
-- Every guild member with class-colored name, level, class, and zone (or how long they've been offline).
+- Every guild member with class icon and class-colored name, level, zone (or how long they've been offline), and rank.
 - Click a column header to sort, search by name, and toggle "Show offline" (remembered per character).
-- Hover a member to see their rank and public note.
-- Footer shows member, online, and Unc's Tavern user counts.
+- Hover a member to see their level, class, rank and public note.
+- Footer: "X of Y online · Z using Unc's Tavern".
 - **Sync** button to ask everyone running the addon to check in again.
 
 **Wishlist tab**
@@ -81,7 +81,6 @@ The minimap button works like `/tavern` (right-click opens the Settings tab).
 ## Roadmap
 
 Coming soon:
-- **Guild tab roster columns:** class icons and a Rank column, with a tidier footer.
 - **PvP stats** on the roster: Kills, Deaths and K/D shared over guild sync.
 - **Wishlist item search** and **rule requests** (e.g. Cloth, level 26+, 4+ Intellect).
 - **Bag tooltips:** "Wanted by &lt;name&gt;: N more · price" on wanted items.

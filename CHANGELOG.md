@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The first tab is now labelled with your guild's name (read live); tabs are [Guild name] · Wishlist · Settings.
 - `/tavern` and the minimap button swap with the guild window when it's open, otherwise open or close Unc's Tavern where the guild window last was.
 - The window opens on the guild tab, can be dragged and resized, and has a button next to the X that resets it to the guild window's size and position. The icon is hidden when you have no guild.
+- Guild tab: class icons next to names, new Rank column (sorts guild master first), Class column dropped (the icon and tooltip show it); footer reads "X of Y online · Z using Unc's Tavern"; hovering a member shows level, class, rank and public note; the Discord note moved out of the footer (it's in Settings and the level-up popup); roster refreshes are throttled to one every 2 seconds.
 
 ## [0.1.0] - 2026-11-14
 

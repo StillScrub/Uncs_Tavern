@@ -1,8 +1,10 @@
--- Modules\Roster.lua: Roster tab. Guild members with level, class, zone / last online,
--- and PvP columns (filled by a PvP stats provider once one exists, "—" until then).
+-- Modules\Roster.lua: the guild tab (roster). Class icon + class-colored name, level,
+-- zone / last online, rank, and PvP columns (filled by a PvP stats provider once one
+-- exists, "—" until then). Hover a row for rank and public note.
 --
--- Event-driven: rebuilds on GUILD_ROSTER_UPDATE only while the tab is visible;
--- otherwise just marks itself dirty and rebuilds on next show.
+-- Event-driven: GUILD_ROSTER_UPDATE fires in bursts, so rebuilds are coalesced into one
+-- per THROTTLE seconds (a single C_Timer one-shot, no polling), and only while the tab
+-- is visible; otherwise it just marks itself dirty and rebuilds on next show.
 --
 -- Optional providers other modules can set later (no edits needed here):
 --   ns.PvPStats:Get(fullName) -> kills, deaths   (nil = member has no data)
@@ -10,16 +12,18 @@
 local _, ns = ...
 
 local ROW_HEIGHT = 18
+local ICON_SIZE  = 14
 local DASH       = "—"
+local THROTTLE   = 2 -- seconds between roster rebuilds
 
 local COLUMNS = {
-    { key = "name",   label = "Name",   width = 150 },
-    { key = "level",  label = "Level",  width = 40,  justify = "CENTER" },
-    { key = "class",  label = "Class",  width = 95 },
-    { key = "zone",   label = "Zone",   width = 190 },
-    { key = "kills",  label = "Kills",  width = 55,  justify = "CENTER" },
-    { key = "deaths", label = "Deaths", width = 55,  justify = "CENTER" },
-    { key = "kd",     label = "K/D",    width = 50,  justify = "CENTER" },
+    { key = "name",   label = "Name",          width = 175 },
+    { key = "level",  label = "Level",         width = 42,  justify = "CENTER" },
+    { key = "zone",   label = "Zone / Status", width = 170 },
+    { key = "rank",   label = "Rank",          width = 115 },
+    { key = "kills",  label = "Kills",         width = 52,  justify = "CENTER" },
+    { key = "deaths", label = "Deaths",        width = 52,  justify = "CENTER" },
+    { key = "kd",     label = "K/D",           width = 48,  justify = "CENTER" },
 }
 do
     local x = 0
@@ -30,6 +34,7 @@ local panel, scrollBox, dataProvider, searchBox, offlineCheck, footer, emptyText
 local headers = {}
 local members = {}   -- full unfiltered list from the last roster read
 local dirty = true
+local pendingRebuild = false -- a throttled rebuild is scheduled
 
 local function Prefs()
     ns.charDB.roster = ns.charDB.roster or { showOffline = false, sortKey = "zone", sortAsc = true }
@@ -49,6 +54,22 @@ local function ClassColor(classFile)
     return HIGHLIGHT_FONT_COLOR
 end
 
+-- Class icon: the modern atlas if Forever has it, else the classic class-circle sheet.
+local function SetClassIcon(tex, classFile)
+    if not classFile then tex:Hide() return end
+    local atlas = "classicon-" .. classFile:lower()
+    if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) then
+        tex:SetAtlas(atlas)
+    elseif CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classFile] then
+        tex:SetTexture("Interface\\TargetingFrame\\UI-Classes-Circles")
+        tex:SetTexCoord(unpack(CLASS_ICON_TCOORDS[classFile]))
+    else
+        tex:Hide()
+        return
+    end
+    tex:Show()
+end
+
 local function OfflineText(mins)
     if mins < 60 then return "Offline <1h" end
     local h = math.floor(mins / 60)
@@ -66,13 +87,14 @@ local function ReadRoster()
     local pvp = ns.PvPStats
     local n = GetNumGuildMembers() or 0
     for i = 1, n do
-        local full, rank, _, level, classDisplay, zone, note, _, online, _, classFile, _, _, isMobile =
+        local full, rank, rankIndex, level, classDisplay, zone, note, _, online, _, classFile, _, _, isMobile =
             GetGuildRosterInfo(i)
         if full then
             local m = {
                 full = full,
                 name = Ambiguate(full, "guild"),
-                rank = rank,
+                rank = rank or "",
+                rankIndex = rankIndex or 99,
                 note = note,
                 level = level or 0,
                 class = classDisplay or "",
@@ -102,8 +124,8 @@ end
 local SORTERS = {
     name   = function(m) return m.name:lower() end,
     level  = function(m) return m.level end,
-    class  = function(m) return m.class end,
     zone   = function(m) return m.offlineMins end, -- online first, then most recently online
+    rank   = function(m) return m.rankIndex end,   -- guild master first
     kills  = function(m) return m.kills end,
     deaths = function(m) return m.deaths end,
     kd     = function(m) return m.kd end,
@@ -133,8 +155,13 @@ local function RowOnEnter(row)
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
     local c = ClassColor(m.classFile)
     GameTooltip:AddLine(m.full, c.r, c.g, c.b)
-    if m.rank then GameTooltip:AddLine(m.rank, 1, 1, 1) end
-    if m.note and m.note ~= "" then GameTooltip:AddLine(m.note, 0.8, 0.8, 0.8, true) end
+    GameTooltip:AddLine(("Level %d %s"):format(m.level, m.class), 1, 1, 1)
+    if m.rank ~= "" then GameTooltip:AddLine(m.rank, 1, 1, 1) end
+    if m.note and m.note ~= "" then
+        GameTooltip:AddLine(m.note, 0.8, 0.8, 0.8, true)
+    else
+        GameTooltip:AddLine("No public note", 0.5, 0.5, 0.5)
+    end
     GameTooltip:Show()
 end
 
@@ -145,10 +172,14 @@ local function InitRow(row, m)
         row.bg:SetColorTexture(1, 1, 1, 0.04)
         row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
         row.cells = {}
+        row.classIcon = row:CreateTexture(nil, "ARTWORK")
+        row.classIcon:SetSize(ICON_SIZE, ICON_SIZE)
+        row.classIcon:SetPoint("LEFT", row, "LEFT", 4, 0)
         for i, col in ipairs(COLUMNS) do
             local fs = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-            fs:SetPoint("LEFT", row, "LEFT", col.x + 4, 0)
-            fs:SetWidth(col.width - 8)
+            local pad = (i == 1) and (ICON_SIZE + 8) or 4 -- name cell makes room for the icon
+            fs:SetPoint("LEFT", row, "LEFT", col.x + pad, 0)
+            fs:SetWidth(col.width - pad - 4)
             fs:SetJustifyH(col.justify or "LEFT")
             fs:SetWordWrap(false)
             row.cells[i] = fs
@@ -161,11 +192,12 @@ local function InitRow(row, m)
 
     local c = ClassColor(m.classFile)
     local cells = row.cells
+    SetClassIcon(row.classIcon, m.classFile)
     cells[1]:SetText(m.name)
     cells[1]:SetTextColor(c.r, c.g, c.b)
     cells[2]:SetText(m.level)
-    cells[3]:SetText(m.class)
-    cells[4]:SetText(m.zoneText)
+    cells[3]:SetText(m.zoneText)
+    cells[4]:SetText(m.rank)
     cells[5]:SetText(m.kills or DASH)
     cells[6]:SetText(m.deaths or DASH)
     cells[7]:SetText(m.kd and ("%.2f"):format(m.kd) or DASH)
@@ -221,7 +253,7 @@ local function Refresh()
     emptyText:SetShown(#shown == 0)
 
     local users = (ns.Comm and ns.Comm.CountAddonUsers) and ns.Comm:CountAddonUsers() or 0
-    footer:SetText(("%d members  ·  %d online  ·  %d with %s"):format(#members, online, users, ns.title))
+    footer:SetText(("%d of %d online  ·  %d using %s"):format(online, #members, users, ns.title))
     UpdateHeaders()
 end
 
@@ -231,8 +263,15 @@ local function Rebuild()
     dirty = false
 end
 
+-- Roster events arrive in bursts: rebuild at most once per THROTTLE seconds.
 local function OnRosterEvent()
-    if panel and panel:IsVisible() then Rebuild() else dirty = true end
+    dirty = true
+    if pendingRebuild or not (panel and panel:IsVisible()) then return end
+    pendingRebuild = true
+    C_Timer.After(THROTTLE, function()
+        pendingRebuild = false
+        if dirty and panel:IsVisible() then Rebuild() end
+    end)
 end
 
 local function RequestRoster()
@@ -311,7 +350,7 @@ local function Build(p)
             if pr.sortKey == self.key then
                 pr.sortAsc = not pr.sortAsc
             else
-                pr.sortKey, pr.sortAsc = self.key, (self.key == "name" or self.key == "class" or self.key == "zone")
+                pr.sortKey, pr.sortAsc = self.key, (self.key == "name" or self.key == "rank" or self.key == "zone")
             end
             if SOUNDKIT then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
             Refresh()
@@ -332,11 +371,6 @@ local function Build(p)
     footer = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     footer:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 8, 6)
 
-    local discordNote = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    discordNote:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, 6)
-    discordNote:SetJustifyH("RIGHT")
-    discordNote:SetWordWrap(false)
-    discordNote:SetText(ns.DISCORD_NOTE_SHORT)
 
     -- Sync: ask every guild member running the addon to announce themselves again.
     local syncButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
