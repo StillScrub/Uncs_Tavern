@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-14
+
 ### Added
-- **PvP stats** on the guild tab, shared over guild sync: Kills (lifetime honorable kills, incl. assists), Deaths (deaths to players: lifetime when the game tracks it, otherwise since install) K/D, and a Dishonorable column (kills on players too low level to give honor; not part of K/D). Hover a member for killing blows on players, dishonorable deaths (killed by someone you were grey to, when their level was visible) and "Most killed by".
+- **PvP stats** on the guild tab, shared over guild sync: Kills (lifetime honorable kills, incl. assists), Deaths (deaths to players: lifetime when the game tracks it, otherwise since install), K/D and a Dishonorable column (kills on players too low level to give honor; not part of K/D). Hover a member for killing blows on players, dishonorable deaths (killed by someone you were grey to, when their level was visible) and "Most killed by".
 - **Farming warning:** chat warning when the same player kills you 3 times within 30 minutes (Settings toggle).
 - `/tavern pvpdebug` shows your PvP numbers, their sources and the last kill/death signal.
 
@@ -44,5 +46,6 @@ First release.
 - Wishlist uses drag only: shift-click opened the bag's split-stack box, which grabbed keyboard input.
 - Level-up posts now go through: WoW: Forever blocks addon chat that isn't triggered by a click.
 
-[Unreleased]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/StillScrub/Uncs_Tavern/releases/tag/v0.1.0
