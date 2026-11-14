@@ -10,7 +10,8 @@
 --   ns.Comm:Send(type, ...fields)            queue a guild message (throttled)
 --   ns.Comm:RegisterHandler(type, fn)        fn(sender, ...fields)
 --   ns.Comm:HasAddon(name) -> version|nil    ns.Comm:CountAddonUsers() -> n
--- Fires ns callback "ADDON_USERS_CHANGED" when someone new is seen.
+-- Fires ns callback "ADDON_USERS_CHANGED" when someone new is seen, and "HELLO" (sender, flag)
+-- for every hello, so modules can answer a guildmate's login or Sync with their own data.
 local _, ns = ...
 
 local Comm = {}
@@ -150,6 +151,7 @@ Comm:RegisterHandler("H", function(sender, version, flag)
     local isNew = not users[sender] or users[sender].version ~= version
     users[sender] = { version = version, seen = time() }
     if isNew then ns:Fire("ADDON_USERS_CHANGED", sender) end
+    ns:Fire("HELLO", sender, flag)
 
     if not newerVersionWarned and VersionNumber(version) > VersionNumber(ns.version) then
         newerVersionWarned = true

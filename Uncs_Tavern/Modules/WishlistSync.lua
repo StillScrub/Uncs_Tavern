@@ -5,6 +5,9 @@
 --        from = "Name:5,Other:3" (who delivered; added after note so older copies ignore it)
 --        one request. id is rebuilt as "requester:created:rand". Sent live whenever
 --        you add/remove a request, and during catch-up.
+--   RR |requester|class|rule|qty|received|price|created|rand|updated|deleted|note|from
+--        a rule request (rule = "armor:slot:minLevel:stat:minStat"). Its own type, so
+--        older clients that don't know rules ignore it instead of showing a broken row.
 --   C  |requester|created|rand|claimer|class|qty|updated|deleted
 --        one claim ("I'm sending N") on the request requester:created:rand.
 --   WQ |since          "send me everything updated since <serverTime>" (0 = everything)
@@ -32,7 +35,9 @@ local OWN_PUSH_DAYS = 2    -- on login, re-send own requests changed in this win
 ---------------------------------------------------------------------------
 local function SendRecord(req)
     local rand = req.id:match(":(%d+)$") or "0"
-    Comm:Send("R", req.requester, req.class or "", req.itemID, req.qty, req.received or 0,
+    local msgType, what = "R", req.itemID
+    if req.rule then msgType, what = "RR", W:EncodeRule(req.rule) end
+    Comm:Send(msgType, req.requester, req.class or "", what, req.qty, req.received or 0,
         req.price or 0, req.created, rand, req.updated, req.deleted and 1 or 0, req.note or "",
         W:EncodeFrom(req.receivedFrom))
 end
@@ -143,6 +148,15 @@ local mergedCount = 0 -- requests changed by sync this session (for the summary)
 Comm:RegisterHandler("R", function(_, ...)
     local rec = DecodeRecord(...)
     if rec and W:Merge(rec) then mergedCount = mergedCount + 1 end
+end)
+
+Comm:RegisterHandler("RR", function(_, requester, class, ruleText, ...)
+    local rule = W:DecodeRule(ruleText)
+    if not rule then return end
+    local rec = DecodeRecord(requester, class, nil, ...)
+    if not rec then return end
+    rec.itemID, rec.rule = nil, rule
+    if W:Merge(rec) then mergedCount = mergedCount + 1 end
 end)
 
 Comm:RegisterHandler("C", function(_, ...)

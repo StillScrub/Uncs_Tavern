@@ -30,7 +30,7 @@ local ICON       = "Interface\\AddOns\\Uncs_Tavern\\Media\\Icon"
 -- The guild window's large size (from /tavern frametest). In small mode (322 wide) our
 -- content doesn't fit, so we use at least this width.
 local DEFAULT_W, DEFAULT_H = 814, 426
-local MIN_W, MIN_H = 750, 380
+local MIN_W, MIN_H = 780, 380
 -- Frame-level offset for our buttons, so they draw above the window's own art
 -- (+20 was hidden behind the windows' border and the guild emblem).
 local ON_TOP = 500

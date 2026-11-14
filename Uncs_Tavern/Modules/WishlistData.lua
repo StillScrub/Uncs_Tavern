@@ -5,7 +5,12 @@
 --   id        "<requester>:<created>:<rand>"  (unique across the guild)
 --   requester full two-part name, e.g. "Hexual Defect"
 --   class     class file name of the requester (for coloring), e.g. "SHAMAN"
---   itemID    number
+--   itemID    number (item requests), or nil for a rule request
+--   rule      rule requests only: { armor, slot, minLevel, stat, minStat }
+--             armor = 1 Cloth | 2 Leather | 3 Mail | 4 Plate (armor subclass IDs)
+--             slot = "" (any) or an equip slot like "INVTYPE_HEAD"
+--             minLevel = lowest required level; stat = "INT" | "STR" | ... ; minStat >= 1
+--             optional second stat: stat2, minStat2 (the item needs both)
 --   qty       how many wanted in total
 --   received  how many have arrived so far
 --   receivedFrom  { [senderName] = n } who sent them (so their claims count as delivered)
@@ -70,7 +75,153 @@ function Wishlist:IsMine(req)
     return req and req.requester == ns:PlayerName()
 end
 
--- "Gear" = weapons and armor; everything else counts as "Mats".
+---------------------------------------------------------------------------
+-- Rule requests: "any Cloth item, required level 26+, with 4+ Intellect".
+---------------------------------------------------------------------------
+local ARMOR_CLASS = (Enum and Enum.ItemClass and Enum.ItemClass.Armor) or 4
+Wishlist.ARMOR_TYPES = { 1, 2, 3, 4 } -- Cloth, Leather, Mail, Plate
+local ARMOR_FALLBACK = { "Cloth", "Leather", "Mail", "Plate" }
+-- "" = any slot. Robes count as chest.
+Wishlist.SLOTS = { "", "INVTYPE_HEAD", "INVTYPE_SHOULDER", "INVTYPE_CLOAK", "INVTYPE_CHEST", "INVTYPE_WRIST",
+    "INVTYPE_HAND", "INVTYPE_WAIST", "INVTYPE_LEGS", "INVTYPE_FEET" }
+Wishlist.STATS = {
+    { key = "STA", mod = "ITEM_MOD_STAMINA_SHORT",   fallback = "Stamina" },
+    { key = "STR", mod = "ITEM_MOD_STRENGTH_SHORT",  fallback = "Strength" },
+    { key = "AGI", mod = "ITEM_MOD_AGILITY_SHORT",   fallback = "Agility" },
+    { key = "INT", mod = "ITEM_MOD_INTELLECT_SHORT", fallback = "Intellect" },
+    { key = "SPI", mod = "ITEM_MOD_SPIRIT_SHORT",    fallback = "Spirit" },
+}
+local STAT_BY_KEY = {}
+for _, s in ipairs(Wishlist.STATS) do STAT_BY_KEY[s.key] = s end
+local SLOT_OK = {}
+for _, s in ipairs(Wishlist.SLOTS) do SLOT_OK[s] = true end
+Wishlist.MAX_LEVEL = 100
+Wishlist.MAX_STAT  = 999
+
+-- Localized names, straight from the game.
+function Wishlist:ArmorName(armor)
+    local f = (C_Item and C_Item.GetItemSubClassInfo) or GetItemSubClassInfo
+    local name = f and f(ARMOR_CLASS, armor)
+    return name or ARMOR_FALLBACK[armor] or "?"
+end
+
+function Wishlist:SlotName(slot)
+    if not slot or slot == "" then return "Any slot" end
+    return _G[slot] or slot:gsub("^INVTYPE_", "")
+end
+
+function Wishlist:StatName(key)
+    local s = STAT_BY_KEY[key]
+    return s and (_G[s.mod] or s.fallback) or "?"
+end
+
+-- "Cloth · Head · Lv 26+ · 4+ Intellect"
+function Wishlist:RuleText(rule)
+    local parts = { self:ArmorName(rule.armor) }
+    if rule.slot ~= "" then parts[#parts + 1] = self:SlotName(rule.slot) end
+    if rule.minLevel > 1 then parts[#parts + 1] = ("Lv %d+"):format(rule.minLevel) end
+    local stats = ("%d+ %s"):format(rule.minStat, self:StatName(rule.stat))
+    if rule.stat2 then stats = stats .. (" & %d+ %s"):format(rule.minStat2, self:StatName(rule.stat2)) end
+    parts[#parts + 1] = stats
+    return table.concat(parts, " · ")
+end
+
+-- Short name of any request (item name, or the rule text).
+function Wishlist:Label(req)
+    if req.rule then return self:RuleText(req.rule) end
+    return C_Item.GetItemInfo(req.itemID) or ("item " .. tostring(req.itemID))
+end
+
+-- Validates a rule; returns a clean copy or nil + message.
+function Wishlist:CleanRule(rule)
+    if type(rule) ~= "table" then return nil, "Set up the rule first." end
+    local armor = tonumber(rule.armor)
+    local minLevel = tonumber(rule.minLevel) or 1
+    local minStat = tonumber(rule.minStat)
+    if not armor or armor < 1 or armor > 4 then return nil, "Pick an armor type." end
+    if not SLOT_OK[rule.slot or ""] then return nil, "Unknown slot." end
+    if minLevel < 1 or minLevel > self.MAX_LEVEL then return nil, "Required level must be 1 to " .. self.MAX_LEVEL .. "." end
+    if not STAT_BY_KEY[rule.stat] then return nil, "Pick a stat." end
+    if not minStat or minStat < 1 or minStat > self.MAX_STAT then return nil, "Enter the minimum stat (1 or more)." end
+    local clean = { armor = math.floor(armor), slot = rule.slot or "", minLevel = math.floor(minLevel),
+                    stat = rule.stat, minStat = math.floor(minStat) }
+    if rule.stat2 and rule.stat2 ~= "" then
+        local minStat2 = tonumber(rule.minStat2)
+        if not STAT_BY_KEY[rule.stat2] then return nil, "Pick the second stat." end
+        if rule.stat2 == rule.stat then return nil, "The second stat must be different from the first." end
+        if not minStat2 or minStat2 < 1 or minStat2 > self.MAX_STAT then
+            return nil, "Enter the minimum for the second stat (1 or more)."
+        end
+        clean.stat2, clean.minStat2 = rule.stat2, math.floor(minStat2)
+    end
+    return clean
+end
+
+-- "armor:slot:minLevel:stat:minStat[:stat2:minStat2]" (for sync)
+function Wishlist:EncodeRule(rule)
+    local text = ("%d:%s:%d:%s:%d"):format(rule.armor, rule.slot, rule.minLevel, rule.stat, rule.minStat)
+    if rule.stat2 then text = text .. (":%s:%d"):format(rule.stat2, rule.minStat2) end
+    return text
+end
+
+function Wishlist:DecodeRule(text)
+    if type(text) ~= "string" then return nil end
+    local armor, slot, minLevel, stat, minStat, rest = text:match("^(%d+):([%w_]*):(%d+):(%u+):(%d+)(.*)$")
+    if not armor then return nil end
+    local stat2, minStat2
+    if rest ~= "" then
+        stat2, minStat2 = rest:match("^:(%u+):(%d+)$")
+        if not stat2 then return nil end
+    end
+    return self:CleanRule({ armor = armor, slot = slot, minLevel = minLevel, stat = stat, minStat = minStat,
+                            stat2 = stat2, minStat2 = minStat2 })
+end
+
+local function ItemStats(link)
+    local f = (C_Item and C_Item.GetItemStats) or GetItemStats
+    if not f then return nil end
+    local ok, stats = pcall(f, link)
+    return ok and stats or nil
+end
+
+-- Does this item (a link, so random-enchant stats count) fit the rule?
+-- Returns nil when the item's data isn't loaded yet.
+function Wishlist:MatchesRule(rule, link)
+    if not link then return false end
+    local _, _, _, equipLoc, _, classID, subclassID = C_Item.GetItemInfoInstant(link)
+    if classID ~= ARMOR_CLASS or subclassID ~= rule.armor then return false end
+    if equipLoc == "INVTYPE_ROBE" then equipLoc = "INVTYPE_CHEST" end
+    if rule.slot ~= "" and equipLoc ~= rule.slot then return false end
+    local reqLevel = select(5, C_Item.GetItemInfo(link))
+    if not reqLevel then return nil end
+    if reqLevel < rule.minLevel then return false end
+    local stats = ItemStats(link)
+    if not stats then return false end
+    local s = STAT_BY_KEY[rule.stat]
+    if not s or (stats[s.mod] or 0) < rule.minStat then return false end
+    if rule.stat2 then
+        local s2 = STAT_BY_KEY[rule.stat2]
+        if not s2 or (stats[s2.mod] or 0) < rule.minStat2 then return false end
+    end
+    return true
+end
+
+-- My open rule requests this item (link) fits, oldest first.
+function Wishlist:MyRulesMatching(link)
+    local out = {}
+    for _, req in ipairs(self:List("mine")) do
+        if req.rule and self:MatchesRule(req.rule, link) then out[#out + 1] = req end
+    end
+    table.sort(out, function(a, b) return a.created < b.created end)
+    return out
+end
+
+-- "Gear" = weapons and armor (and all rule requests); everything else counts as "Mats".
+function Wishlist:CategoryOf(req)
+    if req.rule then return "gear" end
+    return self:Category(req.itemID)
+end
+
 function Wishlist:Category(itemID)
     local classID = select(6, C_Item.GetItemInfoInstant(itemID))
     local weapon = Enum and Enum.ItemClass and Enum.ItemClass.Weapon or 2
@@ -87,7 +238,7 @@ function Wishlist:List(filter)
         if self:IsOpen(req) then
             local keep = filter == nil or filter == "all"
                 or (filter == "mine" and self:IsMine(req))
-                or (filter ~= "mine" and self:Category(req.itemID) == filter)
+                or (filter ~= "mine" and self:CategoryOf(req) == filter)
             if keep then out[#out + 1] = req end
         end
     end
@@ -102,12 +253,21 @@ function Wishlist:CountOpenOwn()
 end
 
 -- Returns the new request, or nil + an error message for the player.
-function Wishlist:Add(itemID, qty, price, note)
+-- what = an itemID, or a rule table for a rule request.
+function Wishlist:Add(what, qty, price, note)
     local store = Store()
     if not store then return nil, "You are not in a guild." end
-    itemID, qty, price = tonumber(itemID), tonumber(qty), tonumber(price) or 0
+    local itemID, rule
+    if type(what) == "table" then
+        local err
+        rule, err = self:CleanRule(what)
+        if not rule then return nil, err end
+    else
+        itemID = tonumber(what)
+        if not itemID or not C_Item.GetItemInfoInstant(itemID) then return nil, "Pick an item first." end
+    end
+    qty, price = tonumber(qty), tonumber(price) or 0
     note = strtrim(note or ""):gsub("|", "") -- "|" would break chat links and the sync format
-    if not itemID or not C_Item.GetItemInfoInstant(itemID) then return nil, "Pick an item first." end
     if not qty or qty < 1 or qty > self.MAX_QTY then return nil, "Quantity must be 1 to " .. self.MAX_QTY .. "." end
     if price < 0 or price > self.MAX_PRICE then return nil, "Price is too high." end
     if #note > self.MAX_NOTE then note = note:sub(1, self.MAX_NOTE) end
@@ -121,7 +281,8 @@ function Wishlist:Add(itemID, qty, price, note)
         id = ("%s:%d:%d"):format(me, now, math.random(1000, 9999)),
         requester = me,
         class = ns:PlayerClass(),
-        itemID = math.floor(itemID),
+        itemID = itemID and math.floor(itemID),
+        rule = rule,
         qty = math.floor(qty),
         received = 0,
         price = math.floor(price),
@@ -163,7 +324,12 @@ function Wishlist:Merge(rec)
     if not store or type(rec) ~= "table" then return false end
     if type(rec.id) ~= "string" or type(rec.requester) ~= "string" then return false end
     if rec.id:sub(1, #rec.requester + 1) ~= rec.requester .. ":" then return false end
-    if not rec.itemID or not C_Item.GetItemInfoInstant(rec.itemID) then return false end
+    local rule = rec.rule and self:CleanRule(rec.rule)
+    if rec.rule then
+        if not rule then return false end
+    elseif not rec.itemID or not C_Item.GetItemInfoInstant(rec.itemID) then
+        return false
+    end
     if not rec.qty or rec.qty < 1 or rec.qty > self.MAX_QTY then return false end
     if not rec.price or rec.price < 0 or rec.price > self.MAX_PRICE then return false end
     if not rec.updated or not rec.created then return false end
@@ -177,7 +343,7 @@ function Wishlist:Merge(rec)
     end
     store[rec.id] = {
         id = rec.id, requester = rec.requester, class = rec.class,
-        itemID = rec.itemID, qty = rec.qty, received = math.min(rec.received or 0, rec.qty),
+        itemID = (not rule) and rec.itemID or nil, rule = rule, qty = rec.qty, received = math.min(rec.received or 0, rec.qty),
         price = rec.price, note = (rec.note or ""):sub(1, self.MAX_NOTE),
         receivedFrom = type(rec.receivedFrom) == "table" and rec.receivedFrom or nil,
         created = rec.created, updated = rec.updated, deleted = rec.deleted or nil,
@@ -243,6 +409,27 @@ function Wishlist:AddReceived(itemID, count, sender)
             end
             used = used + take
             Touch(req)
+            ns:Fire("WISHLIST_RECEIVED", req, take, sender)
+        end
+        if used >= count then break end
+    end
+    return used
+end
+
+-- An item arrived that fits my rule requests: count it toward the oldest ones.
+function Wishlist:AddReceivedRule(link, count, sender)
+    local used = 0
+    for _, req in ipairs(self:MyRulesMatching(link)) do
+        local take = math.min(count - used, req.qty - (req.received or 0))
+        if take > 0 then
+            req.received = (req.received or 0) + take
+            if sender and sender ~= "" then
+                req.receivedFrom = req.receivedFrom or {}
+                req.receivedFrom[sender] = (req.receivedFrom[sender] or 0) + take
+            end
+            used = used + take
+            Touch(req)
+            ns:Fire("WISHLIST_RECEIVED", req, take, sender)
         end
         if used >= count then break end
     end

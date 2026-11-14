@@ -118,16 +118,19 @@ local DEFAULTS = {
         vendorPopup   = true,
         tooltipLines  = true,
         minimapButton = true,
-        farmWarning   = true,
     },
     wishlist = {},
     roster   = {},
     pvp      = {}, -- [guildKey][name] = guildmates' shared PvP stats
+    seenItems = {}, -- [itemID] = true, items seen in bags (wishlist search)
+    helped   = {}, -- [guildKey][name] = guildmates' shared "Helped" counts
 }
 
 local CHAR_DEFAULTS = {
     -- My own PvP tracking (Modules\PvPStats.lua). Lifetime honorable kills come from the game.
     pvp = { deaths = 0, dishonorableKills = 0, dishonorableDeaths = 0, killingBlows = 0, killers = {} },
+    -- My wishlist history (Modules\History.lua).
+    history = { entries = {} },
 }
 
 -- MIGRATIONS[n] upgrades a db from version n-1 to n.

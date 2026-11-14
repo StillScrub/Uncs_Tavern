@@ -18,7 +18,7 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 
 **Guild window swap**
 - The Unc's Tavern icon sits inside the guild window's portrait; it is the only change to Blizzard's UI.
-- Clicking it closes the guild window and opens the Unc's Tavern window in the same spot, with bottom tabs **[your guild's name] · Wishlist · Settings**. The icon in its corner swaps back.
+- Clicking it closes the guild window and opens the Unc's Tavern window in the same spot, with bottom tabs **[your guild's name] · Wishlist · History · Settings**. The icon in its corner swaps back.
 - Drag the window to move it, resize it from the bottom-right corner, or reset it to the guild window's size with the button next to the X. It opens on the guild tab. No guild: no icon.
 
 **Guild tab (roster)**
@@ -27,11 +27,16 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 - Hover a member to see their level, class, rank and public note.
 - Footer: "X of Y online · Z using Unc's Tavern".
 - **PvP stats** for members running the addon: Kills (lifetime honorable kills), Deaths (deaths to players), K/D, and Dishonorable kills (players too low level to give honor; not part of K/D). Hover a member for killing blows, dishonorable deaths and who has killed them most.
-- **Farming warning:** a chat warning when the same player kills you 3 times within 30 minutes.
+- **Helped:** how many times each member has delivered wishlist items to a guildmate.
 - **Sync** button to ask everyone running the addon to check in again.
 
 **Wishlist tab**
-- Request items: drag an item from your bags into the slot, set quantity, an optional note, and payment (**Gift** or **Pay up to** a price per item).
+- Request items: drag an item from your bags into the slot or **search by name**, set quantity, an optional note, and payment (**Gift** or **Pay up to** a price per item).
+- **Rule requests:** ask for any gear that fits, e.g. "Cloth, any slot, required level 26+, 4+ Intellect", optionally with a second stat.
+
+**History tab**
+- Your own **Items received** and **Items sent** through the wishlist (only you see it).
+- Tick **Show all completed guild requests** to see every finished request and who filled it.
 - List shows item (quality-colored), progress (`8 / 20`), requester (class-colored), payment, note, and claims.
 - Filters: **All / Mats / Gear / Mine**, plus **Hide mine**.
 - **Claims** ("I'm sending N") so guildmates don't double-send. Claims last 72 hours.
@@ -44,7 +49,7 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 
 **Minimap button & Settings**
 - Minimap button: left-click opens or closes Unc's Tavern (swapping with the guild window if it's open), right-click opens its Settings; drag to move.
-- Settings tab with toggles for level-up posts, the farming warning and the minimap button.
+- Settings tab with toggles for level-up posts and the minimap button.
 
 ## Screenshots
 
@@ -83,7 +88,6 @@ The minimap button works like `/tavern` (right-click opens the Settings tab).
 ## Roadmap
 
 Coming soon:
-- **Wishlist item search** and **rule requests** (e.g. Cloth, level 26+, 4+ Intellect).
 - **Bag tooltips:** "Wanted by &lt;name&gt;: N more · price" on wanted items.
 - **Vendor / auction house / mailbox popup:** "N items in your bags are on the guild wishlist".
 - **Mailbox "Guild Requests" tab:** pick a request and get a ready-to-send mail draft (recipient, items, COD).

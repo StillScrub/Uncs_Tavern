@@ -9,12 +9,15 @@
 Core.lua
 Comm.lua
 UI\MainFrame.lua
+UI\Columns.lua
 
 Modules\Roster.lua
 Modules\WishlistData.lua
+Modules\ItemSearch.lua
 Modules\Wishlist.lua
 Modules\WishlistSync.lua
 Modules\AutoComplete.lua
+Modules\History.lua
 Modules\Settings.lua
 Modules\LevelUp.lua
 Modules\MinimapButton.lua

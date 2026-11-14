@@ -1,25 +1,31 @@
 -- Modules\Wishlist.lua: Wishlist tab (UI only; data lives in WishlistData.lua).
--- Step 1: add a request (drag an item into the slot, quantity, note, payment) and
--- list open requests with filters. Claims: other people's rows have a Claim
--- button ("I'm sending N"). Rule requests and item search come in later steps. (Shift-click was dropped: on stacks it opens the bag's
--- split-stack box, which then grabs keyboard input.)
+-- Add a request in one of two modes:
+--   Item: drag an item into the slot, or type in the search box (ItemSearch.lua) and
+--         pick from the list. (Shift-click was dropped: on stacks it opens the bag's
+--         split-stack box, which then grabs keyboard input.)
+--   Rule: armor type + slot + minimum required level + one stat with a minimum.
+-- Both take quantity, note and payment. The list shows open requests with filters;
+-- other people's rows have a Claim button ("I'm sending N"), your own Got and remove.
 local _, ns = ...
 local W = ns.Wishlist
 
 local ROW_HEIGHT = 22
+local FORM_HEIGHT = { item = 108, rule = 142 }
+-- Item and Note grow with the window; the rest are sized to fit their content
+-- (Requester fits a full two-part name).
 local COLUMNS = {
-    { key = "item",      label = "Item",      width = 165 },
+    { key = "item",      label = "Item",      width = 170, flex = 3 },
     { key = "progress",  label = "Progress",  width = 55, justify = "CENTER" },
-    { key = "requester", label = "Requester", width = 110 },
-    { key = "payment",   label = "Payment",   width = 90 },
-    { key = "note",      label = "Note",      width = 100 },
-    { key = "claims",    label = "Claimed",   width = 75, justify = "CENTER" },
+    { key = "requester", label = "Requester", width = 140 },
+    { key = "payment",   label = "Payment",   width = 95 },
+    { key = "note",      label = "Note",      width = 90, flex = 2 },
+    { key = "claims",    label = "Claimed",   width = 70, justify = "CENTER" },
     { key = "actions",   label = "",          width = 55 },
 }
-do
-    local x = 0
-    for _, col in ipairs(COLUMNS) do col.x = x; x = x + col.width end
-end
+ns.Columns.Layout(COLUMNS, 0)
+local headerCells = {}
+local layoutVersion = 0
+local LayoutRow -- defined with the rows
 
 local FILTERS = {
     { key = "all",  label = "All" },
@@ -28,11 +34,23 @@ local FILTERS = {
     { key = "mine", label = "Mine" },
 }
 
+local ARMOR_ICONS = {
+    "Interface\\Icons\\INV_Chest_Cloth_17", "Interface\\Icons\\INV_Chest_Leather_09",
+    "Interface\\Icons\\INV_Chest_Chain_05", "Interface\\Icons\\INV_Chest_Plate06",
+}
+local QUESTION_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
+
 local panel, scrollBox, emptyText, countText, hideMineCheck
 local slot, qtyBox, noteBox, giftRadio, payRadio, goldBox, silverBox, copperBox
 local filterButtons = {}
 local filter = "all"
 local selectedItemID
+local mode = "item"                     -- "item" | "rule"
+local modeButtons = {}
+local itemPane, rulePane, searchBox, pickList
+local armorButton, slotButton, statButton, levelBox, statBox
+local stat2Check, stat2Box, stat2Button, qtyLabel, form, noteLabel
+local ruleDraft = { armor = 1, slot = "", stat = "INT", stat2 = "STA" }
 
 ---------------------------------------------------------------------------
 -- Helpers
@@ -86,6 +104,66 @@ local function CoinIcon(parent, box, coin)
     return t
 end
 
+local function RequestIcon(req)
+    if req.rule then return ARMOR_ICONS[req.rule.armor] or QUESTION_ICON end
+    return ItemIcon(req.itemID)
+end
+
+---------------------------------------------------------------------------
+-- Pick list: a small drop-down list under a widget, used by the search box and
+-- the rule's Armor / Slot / Stat buttons. entries = { { text, icon, color, value } }
+---------------------------------------------------------------------------
+local PICK_ROW = 18
+
+local function HidePickList()
+    if pickList then pickList:Hide() end
+end
+
+local function ShowPickList(anchor, entries, onPick, width)
+    if not pickList then
+        pickList = CreateFrame("Frame", nil, panel, "TooltipBackdropTemplate")
+        pickList:SetFrameStrata("DIALOG")
+        pickList:EnableMouse(true)
+        pickList.buttons = {}
+    end
+    if #entries == 0 then pickList:Hide() return end
+    pickList:ClearAllPoints()
+    pickList:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", -4, -2)
+    pickList:SetSize(width or anchor:GetWidth() + 8, #entries * PICK_ROW + 12)
+    for i, e in ipairs(entries) do
+        local b = pickList.buttons[i]
+        if not b then
+            b = CreateFrame("Button", nil, pickList)
+            b:SetHeight(PICK_ROW)
+            b:SetPoint("TOPLEFT", 6, -6 - (i - 1) * PICK_ROW)
+            b:SetPoint("RIGHT", -6, 0)
+            b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+            b.icon = b:CreateTexture(nil, "ARTWORK")
+            b.icon:SetSize(PICK_ROW - 2, PICK_ROW - 2)
+            b.icon:SetPoint("LEFT")
+            b.text = b:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+            b.text:SetJustifyH("LEFT")
+            b.text:SetWordWrap(false)
+            pickList.buttons[i] = b
+        end
+        b.icon:SetTexture(e.icon)
+        b.icon:SetShown(e.icon ~= nil)
+        b.text:ClearAllPoints()
+        b.text:SetPoint("LEFT", b, "LEFT", e.icon and PICK_ROW + 2 or 2, 0)
+        b.text:SetPoint("RIGHT")
+        b.text:SetText(e.text)
+        local c = e.color or HIGHLIGHT_FONT_COLOR
+        b.text:SetTextColor(c.r, c.g, c.b)
+        b:SetScript("OnClick", function()
+            pickList:Hide()
+            onPick(e.value)
+        end)
+        b:Show()
+    end
+    for i = #entries + 1, #pickList.buttons do pickList.buttons[i]:Hide() end
+    pickList:Show()
+end
+
 ---------------------------------------------------------------------------
 -- Item slot
 ---------------------------------------------------------------------------
@@ -94,7 +172,7 @@ local function SetSlotItem(itemID)
     if not itemID then
         slot.icon:SetTexture(nil)
         slot.border:Hide()
-        slot.name:SetText("|cff808080Drag an item from your bags onto this slot|r")
+        slot.name:SetText("|cff808080Drag an item onto the slot, or search above|r")
         return
     end
     slot.icon:SetTexture(ItemIcon(itemID))
@@ -173,8 +251,7 @@ StaticPopupDialogs[CLAIM_POPUP] = {
 local function OpenClaim(req)
     local mine = W:MyClaim(req.id)
     local free = W:Unclaimed(req, true)
-    local name = C_Item.GetItemInfo(req.itemID) or ("item " .. req.itemID)
-    local line = ("%s for %s (%d still unclaimed)"):format(name, req.requester, free)
+    local line = ("%s for %s (%d still unclaimed)"):format(W:Label(req), req.requester, free)
     StaticPopup_Show(CLAIM_POPUP, line, nil, { reqId = req.id, default = mine and mine.qty or free })
 end
 
@@ -223,8 +300,7 @@ StaticPopupDialogs[GOT_POPUP] = {
 }
 
 local function OpenGot(req)
-    local name = C_Item.GetItemInfo(req.itemID) or ("item " .. req.itemID)
-    local line = ("%s (wanted %d; reaching %d completes it)"):format(name, req.qty, req.qty)
+    local line = ("%s (wanted %d; reaching %d completes it)"):format(W:Label(req), req.qty, req.qty)
     StaticPopup_Show(GOT_POPUP, line, nil, { reqId = req.id, default = req.received or 0 })
 end
 
@@ -236,9 +312,14 @@ local function RowOnEnter(row)
     if not req then return end
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
     -- Own lines only: a full item tooltip refreshes itself when data arrives and wipes added lines.
-    local name, _, quality = C_Item.GetItemInfo(req.itemID)
-    local qc = QualityColor(quality)
-    GameTooltip:AddLine(name or ("item:" .. req.itemID), qc.r, qc.g, qc.b)
+    if req.rule then
+        GameTooltip:AddLine("Any item matching:", 1, 0.82, 0)
+        GameTooltip:AddLine(W:RuleText(req.rule), 1, 1, 1)
+    else
+        local name, _, quality = C_Item.GetItemInfo(req.itemID)
+        local qc = QualityColor(quality)
+        GameTooltip:AddLine(name or ("item:" .. req.itemID), qc.r, qc.g, qc.b)
+    end
     local c = ClassColor(req.class)
     GameTooltip:AddDoubleLine("Requested by", req.requester, 1, 0.82, 0, c.r, c.g, c.b)
     GameTooltip:AddDoubleLine("Wanted", ("%d / %d"):format(req.received or 0, req.qty), 1, 0.82, 0, 1, 1, 1)
@@ -265,8 +346,27 @@ local function RowOnEnter(row)
         end
     end
     GameTooltip:AddLine(date("Added %Y-%m-%d %H:%M", req.created), 0.5, 0.5, 0.5)
-    GameTooltip:AddLine("Hover the icon for item details", 0.5, 0.5, 0.5)
+    if not req.rule then GameTooltip:AddLine("Hover the icon for item details", 0.5, 0.5, 0.5) end
     GameTooltip:Show()
+end
+
+-- Places a row's cells and buttons for the current column widths.
+LayoutRow = function(row)
+    for i, col in ipairs(COLUMNS) do
+        local pad = (i == 1) and ROW_HEIGHT or 0 -- the item cell leaves room for the icon
+        local fs = row.cells[i]
+        fs:ClearAllPoints()
+        fs:SetPoint("LEFT", row, "LEFT", col.x + 4 + pad, 0)
+        fs:SetWidth(col.w - 8 - pad)
+    end
+    local actions = COLUMNS[#COLUMNS]
+    row.remove:ClearAllPoints()
+    row.remove:SetPoint("LEFT", row, "LEFT", actions.x + 33, 0)
+    row.got:ClearAllPoints()
+    row.got:SetPoint("LEFT", row, "LEFT", actions.x + 1, 0)
+    row.claim:ClearAllPoints()
+    row.claim:SetPoint("LEFT", row, "LEFT", actions.x + 2, 0)
+    row.layoutVersion = layoutVersion
 end
 
 local function InitRow(row, entry)
@@ -286,7 +386,13 @@ local function InitRow(row, entry)
             local r = self:GetParent().data
             if not r then return end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetItemByID(r.itemID)
+            if r.rule then
+                GameTooltip:AddLine("Rule request")
+                GameTooltip:AddLine(W:RuleText(r.rule), 1, 1, 1)
+                GameTooltip:AddLine("Any unbound item that fits counts.", 0.8, 0.8, 0.8, true)
+            else
+                GameTooltip:SetItemByID(r.itemID)
+            end
             GameTooltip:Show()
         end)
         row.iconButton:SetScript("OnLeave", GameTooltip_Hide)
@@ -294,18 +400,13 @@ local function InitRow(row, entry)
         row.cells = {}
         for i, col in ipairs(COLUMNS) do
             local fs = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-            local left = col.x + 4 + (i == 1 and ROW_HEIGHT or 0)
-            fs:SetPoint("LEFT", row, "LEFT", left, 0)
-            fs:SetWidth(col.width - 8 - (i == 1 and ROW_HEIGHT or 0))
             fs:SetJustifyH(col.justify or "LEFT")
             fs:SetWordWrap(false)
             row.cells[i] = fs
         end
 
-        local actions = COLUMNS[#COLUMNS]
         row.remove = CreateFrame("Button", nil, row, "UIPanelCloseButton")
         row.remove:SetSize(ROW_HEIGHT, ROW_HEIGHT)
-        row.remove:SetPoint("LEFT", row, "LEFT", actions.x + 33, 0)
         row.remove:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:AddLine("Remove this request")
@@ -319,7 +420,6 @@ local function InitRow(row, entry)
 
         row.got = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
         row.got:SetSize(32, ROW_HEIGHT - 4)
-        row.got:SetPoint("LEFT", row, "LEFT", actions.x + 1, 0)
         row.got:SetNormalFontObject("GameFontNormalSmall")
         row.got:SetHighlightFontObject("GameFontHighlightSmall")
         row.got:SetText("Got")
@@ -337,8 +437,7 @@ local function InitRow(row, entry)
         row.got:SetScript("OnLeave", GameTooltip_Hide)
 
         row.claim = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-        row.claim:SetSize(actions.width - 6, ROW_HEIGHT - 4)
-        row.claim:SetPoint("LEFT", row, "LEFT", actions.x + 2, 0)
+        row.claim:SetSize(COLUMNS[#COLUMNS].width - 6, ROW_HEIGHT - 4)
         row.claim:SetNormalFontObject("GameFontNormalSmall")
         row.claim:SetHighlightFontObject("GameFontHighlightSmall")
         row.claim:SetScript("OnClick", function(self)
@@ -358,20 +457,26 @@ local function InitRow(row, entry)
         row:SetScript("OnLeave", GameTooltip_Hide)
     end
 
+    if row.layoutVersion ~= layoutVersion then LayoutRow(row) end
     row.data = req
     row.bg:SetShown(entry.index % 2 == 0)
-    row.icon:SetTexture(ItemIcon(req.itemID))
+    row.icon:SetTexture(RequestIcon(req))
 
     local cells = row.cells
-    local item = Item:CreateFromItemID(req.itemID)
-    cells[1]:SetText("item:" .. req.itemID)
-    cells[1]:SetTextColor(1, 1, 1)
-    item:ContinueOnItemLoad(function()
-        if row.data ~= req then return end
-        local c = QualityColor(item:GetItemQuality())
-        cells[1]:SetText(item:GetItemName())
-        cells[1]:SetTextColor(c.r, c.g, c.b)
-    end)
+    if req.rule then
+        cells[1]:SetText(W:RuleText(req.rule))
+        cells[1]:SetTextColor(1, 0.82, 0)
+    else
+        local item = Item:CreateFromItemID(req.itemID)
+        cells[1]:SetText("item:" .. req.itemID)
+        cells[1]:SetTextColor(1, 1, 1)
+        item:ContinueOnItemLoad(function()
+            if row.data ~= req then return end
+            local c = QualityColor(item:GetItemQuality())
+            cells[1]:SetText(item:GetItemName())
+            cells[1]:SetTextColor(c.r, c.g, c.b)
+        end)
+    end
 
     cells[2]:SetText(("%d / %d"):format(req.received or 0, req.qty))
     local c = ClassColor(req.class)
@@ -439,8 +544,54 @@ local function SetPayMode(pay)
     end
 end
 
+local function UpdateRuleButtons()
+    armorButton:SetText(W:ArmorName(ruleDraft.armor))
+    slotButton:SetText(W:SlotName(ruleDraft.slot))
+    statButton:SetText(W:StatName(ruleDraft.stat))
+    stat2Button:SetText(W:StatName(ruleDraft.stat2))
+    local on = stat2Check:GetChecked()
+    stat2Box:SetEnabled(on)
+    stat2Button:SetEnabled(on)
+    stat2Box:SetAlpha(on and 1 or 0.5)
+end
+
+local function SetMode(m)
+    mode = m
+    HidePickList()
+    itemPane:SetShown(m == "item")
+    rulePane:SetShown(m == "rule")
+    -- Gear rules are always for one item: no quantity.
+    qtyLabel:SetShown(m == "item")
+    qtyBox:SetShown(m == "item")
+    -- Rule mode: Note lines up with the rule grid's label and field columns.
+    noteLabel:ClearAllPoints()
+    noteBox:ClearAllPoints()
+    if m == "rule" then
+        noteLabel:SetPoint("LEFT", qtyLabel, "LEFT", 0, 0)
+        -- qtyLabel sits at x = 10; the grid's field column starts at x = 92 (+6 for the box border)
+        noteBox:SetPoint("LEFT", noteLabel, "LEFT", 92 + 6 - 10, 0)
+        noteBox:SetWidth(290)
+    else
+        noteLabel:SetPoint("LEFT", qtyBox, "RIGHT", 12, 0)
+        noteBox:SetPoint("LEFT", noteLabel, "RIGHT", 8, 0)
+        noteBox:SetWidth(190)
+    end
+    form:SetHeight(FORM_HEIGHT[m])
+    for _, b in ipairs(modeButtons) do
+        if b.key == m then b:LockHighlight() else b:UnlockHighlight() end
+    end
+end
+
 local function ResetForm()
     SetSlotItem(nil)
+    searchBox:SetText("")
+    HidePickList()
+    ruleDraft.armor, ruleDraft.slot, ruleDraft.stat, ruleDraft.stat2 = 1, "", "INT", "STA"
+    levelBox:SetText("")
+    statBox:SetText("")
+    stat2Box:SetText("")
+    stat2Check:SetChecked(false)
+    UpdateRuleButtons()
     qtyBox:SetText("1")
     noteBox:SetText("")
     goldBox:SetText(""); silverBox:SetText(""); copperBox:SetText("")
@@ -458,7 +609,16 @@ local function Submit()
             return
         end
     end
-    local req, err = W:Add(selectedItemID, qtyBox:GetText(), price, noteBox:GetText())
+    local what = selectedItemID
+    if mode == "rule" then
+        what = { armor = ruleDraft.armor, slot = ruleDraft.slot, stat = ruleDraft.stat,
+                 minLevel = tonumber(levelBox:GetText()) or 1, minStat = tonumber(statBox:GetText()) }
+        if stat2Check:GetChecked() then
+            what.stat2, what.minStat2 = ruleDraft.stat2, tonumber(stat2Box:GetText())
+        end
+    end
+    local qty = (mode == "rule") and 1 or qtyBox:GetText()
+    local req, err = W:Add(what, qty, price, noteBox:GetText())
     if not req then
         ns:Print(err)
         return
@@ -490,23 +650,17 @@ local function Radio(parent, text)
     return r
 end
 
-local function Build(p)
-    panel = p
+-- Build is split into parts: Lua allows a function at most 60 outside variables
+-- (upvalues), and the whole tab in one function went over that.
+local function BuildItemPane()
+    -- Item pane (row 2-3): slot, search box, item name
+    itemPane = CreateFrame("Frame", nil, form)
+    itemPane:SetPoint("TOPLEFT", form, "TOPLEFT", 0, -30)
+    itemPane:SetSize(395, 46)
 
-    -- Form background
-    local form = CreateFrame("Frame", nil, panel)
-    form:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -2)
-    form:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -4, -2)
-    form:SetHeight(100)
-    form:SetFrameLevel(panel:GetFrameLevel() + 10)
-    local formBg = form:CreateTexture(nil, "BACKGROUND")
-    formBg:SetAllPoints()
-    formBg:SetColorTexture(0, 0, 0, 0.25)
-
-    -- Item slot
-    slot = CreateFrame("Button", nil, form)
+    slot = CreateFrame("Button", nil, itemPane)
     slot:SetSize(37, 37)
-    slot:SetPoint("TOPLEFT", form, "TOPLEFT", 8, -8)
+    slot:SetPoint("TOPLEFT", itemPane, "TOPLEFT", 8, -2)
     local slotBg = slot:CreateTexture(nil, "BACKGROUND") -- below the icon, so it can never cover it
     slotBg:SetTexture("Interface\\PaperDoll\\UI-Backpack-EmptySlot")
     slotBg:SetAllPoints()
@@ -517,9 +671,9 @@ local function Build(p)
     slot.border:SetTexture("Interface\\Common\\WhiteIconFrame")
     slot.border:SetAllPoints()
     slot.border:Hide()
-    slot.name = form:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    slot.name:SetPoint("TOPLEFT", slot, "TOPRIGHT", 8, -2)
-    slot.name:SetWidth(360)
+    slot.name = itemPane:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    slot.name:SetPoint("BOTTOMLEFT", slot, "BOTTOMRIGHT", 8, 2)
+    slot.name:SetWidth(330)
     slot.name:SetJustifyH("LEFT")
     slot.name:SetWordWrap(false)
     slot:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -535,20 +689,155 @@ local function Build(p)
             GameTooltip:AddLine("Right-click to clear", 0.5, 0.5, 0.5)
         else
             GameTooltip:AddLine("Item to request")
-            GameTooltip:AddLine("Drag an item from your bags onto this slot.", 1, 1, 1, true)
+            GameTooltip:AddLine("Drag an item from your bags onto this slot, or search by name above.", 1, 1, 1, true)
         end
         GameTooltip:Show()
     end)
     slot:SetScript("OnLeave", GameTooltip_Hide)
 
-    -- Quantity + note (second line beside the slot)
-    local qtyLabel = form:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    qtyLabel:SetPoint("BOTTOMLEFT", slot, "BOTTOMRIGHT", 8, 2)
+    -- Search box (beside the slot, above the item name)
+    searchBox = CreateFrame("EditBox", nil, itemPane, "SearchBoxTemplate")
+    searchBox:SetSize(200, 20)
+    searchBox:SetPoint("TOPLEFT", slot, "TOPRIGHT", 12, 0)
+    searchBox:SetAutoFocus(false)
+    if searchBox.Instructions then searchBox.Instructions:SetText("Search items by name or ID") end
+    local function RunSearch()
+        local text = searchBox:GetText()
+        if not searchBox:HasFocus() or strtrim(text) == "" then HidePickList() return end
+        local entries = {}
+        for _, id in ipairs(ns.ItemSearch:Find(text, 8)) do
+            local name, _, quality = C_Item.GetItemInfo(id)
+            entries[#entries + 1] = { text = name or ("item " .. id), icon = ItemIcon(id),
+                                      color = QualityColor(quality), value = id }
+        end
+        ShowPickList(searchBox, entries, function(id)
+            SetSlotItem(id)
+            searchBox:SetText("")
+            searchBox:ClearFocus()
+        end, 260)
+    end
+    searchBox:HookScript("OnTextChanged", RunSearch)
+    searchBox:HookScript("OnEditFocusGained", function()
+        ns.ItemSearch:Preload()
+        RunSearch()
+    end)
+    searchBox:HookScript("OnEditFocusLost", function()
+        -- Clicking a result takes focus away first; keep the list open while the mouse is on it.
+        if pickList and pickList:IsShown() and not pickList:IsMouseOver() then HidePickList() end
+    end)
+    searchBox:SetScript("OnEnterPressed", function(self)
+        local first = ns.ItemSearch:Find(self:GetText(), 1)[1]
+        if first then SetSlotItem(first) self:SetText("") end
+        self:ClearFocus()
+    end)
+    ns:RegisterCallback("ITEM_SEARCH_UPDATED", function()
+        if searchBox:HasFocus() then RunSearch() end
+    end)
+
+end
+
+-- Rule pane: a two-column grid, labels left-aligned in their own columns.
+--   Armor  [Cloth        ]      Slot       [Any slot ]
+--   Stat   [ 4] [Intellect]     Min. level [26] +
+--   [x] 2nd stat [ 3] [Stamina]
+local GRID = { a = 10, b = 92, c = 236, d = 312 } -- label / field / label / field
+local GRID_ROW = 26
+
+local function GridLabel(text, col, row)
+    local fs = rulePane:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    fs:SetPoint("LEFT", rulePane, "TOPLEFT", GRID[col], -12 - (row - 1) * GRID_ROW)
+    fs:SetText(text)
+    return fs
+end
+
+local function GridButton(col, row, offset, width)
+    local b = CreateFrame("Button", nil, rulePane, "UIPanelButtonTemplate")
+    b:SetSize(width, 20)
+    b:SetPoint("LEFT", rulePane, "TOPLEFT", GRID[col] + (offset or 0), -12 - (row - 1) * GRID_ROW)
+    b:SetNormalFontObject("GameFontHighlightSmall")
+    b:SetDisabledFontObject("GameFontDisableSmall")
+    return b
+end
+
+local function GridBox(col, row)
+    local box = NumBox(rulePane, 32, 3)
+    -- InputBoxTemplate draws its border ~5px left of the frame.
+    box:SetPoint("LEFT", rulePane, "TOPLEFT", GRID[col] + 6, -12 - (row - 1) * GRID_ROW)
+    return box
+end
+
+local function StatEntries()
+    local entries = {}
+    for _, st in ipairs(W.STATS) do entries[#entries + 1] = { text = W:StatName(st.key), value = st.key } end
+    return entries
+end
+
+local function BuildRulePane()
+    rulePane = CreateFrame("Frame", nil, form)
+    rulePane:SetPoint("TOPLEFT", itemPane, "TOPLEFT")
+    rulePane:SetSize(395, 3 * GRID_ROW + 4)
+
+    -- Row 1: armor type, slot
+    GridLabel("Armor", "a", 1)
+    armorButton = GridButton("b", 1, 0, 120)
+    armorButton:SetScript("OnClick", function(self)
+        local entries = {}
+        for _, a in ipairs(W.ARMOR_TYPES) do
+            entries[#entries + 1] = { text = W:ArmorName(a), icon = ARMOR_ICONS[a], value = a }
+        end
+        ShowPickList(self, entries, function(v) ruleDraft.armor = v UpdateRuleButtons() end, 128)
+    end)
+    GridLabel("Slot", "c", 1)
+    slotButton = GridButton("d", 1, 0, 90)
+    slotButton:SetScript("OnClick", function(self)
+        local entries = {}
+        for _, sl in ipairs(W.SLOTS) do entries[#entries + 1] = { text = W:SlotName(sl), value = sl } end
+        ShowPickList(self, entries, function(v) ruleDraft.slot = v UpdateRuleButtons() end, 120)
+    end)
+
+    -- Row 2: first stat, minimum required level
+    GridLabel("Stat", "a", 2)
+    statBox = GridBox("b", 2)
+    statButton = GridButton("b", 2, 42, 78)
+    statButton:SetScript("OnClick", function(self)
+        ShowPickList(self, StatEntries(), function(v) ruleDraft.stat = v UpdateRuleButtons() end, 110)
+    end)
+    GridLabel("Min. level", "c", 2)
+    levelBox = GridBox("d", 2)
+    local plus = rulePane:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    plus:SetPoint("LEFT", levelBox, "RIGHT", 3, 0)
+    plus:SetText("+")
+
+    -- Row 3: optional second stat (the item needs both)
+    stat2Check = CreateFrame("CheckButton", nil, rulePane, "UICheckButtonTemplate")
+    stat2Check:SetSize(22, 22)
+    stat2Check:SetPoint("LEFT", rulePane, "TOPLEFT", GRID.a - 5, -12 - 2 * GRID_ROW)
+    local s2Label = stat2Check.Text or stat2Check.text
+    if not s2Label then
+        s2Label = stat2Check:CreateFontString(nil, "ARTWORK")
+        s2Label:SetPoint("LEFT", stat2Check, "RIGHT", 1, 0)
+    end
+    s2Label:SetFontObject("GameFontNormalSmall")
+    s2Label:SetText("2nd stat")
+    stat2Box = GridBox("b", 3)
+    stat2Button = GridButton("b", 3, 42, 78)
+    stat2Button:SetScript("OnClick", function(self)
+        ShowPickList(self, StatEntries(), function(v) ruleDraft.stat2 = v UpdateRuleButtons() end, 110)
+    end)
+    stat2Check:SetScript("OnClick", function() UpdateRuleButtons() end)
+
+    rulePane:SetScript("OnHide", HidePickList)
+end
+
+local function BuildQtyNoteAndPayment()
+    -- Quantity + note (bottom row of the form, shared by both modes)
+    qtyLabel = form:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    qtyLabel:SetPoint("BOTTOMLEFT", form, "BOTTOMLEFT", 10, 12)
     qtyLabel:SetText("Qty")
     qtyBox = NumBox(form, 40, 4)
     qtyBox:SetPoint("LEFT", qtyLabel, "RIGHT", 8, 0)
 
-    local noteLabel = Label(form, "Note", qtyBox, 12)
+    noteLabel = Label(form, "Note", qtyBox, 12)
     noteBox = TextBox(form, 190, W.MAX_NOTE)
     noteBox:SetPoint("LEFT", noteLabel, "RIGHT", 8, 0)
 
@@ -588,7 +877,7 @@ local function Build(p)
     clearButton:SetPoint("RIGHT", addButton, "LEFT", -6, 0)
     clearButton:SetText("Clear")
     clearButton:SetScript("OnClick", function()
-        for _, box in ipairs({ qtyBox, noteBox, goldBox, silverBox, copperBox }) do box:ClearFocus() end
+        for _, box in ipairs({ qtyBox, noteBox, goldBox, silverBox, copperBox, levelBox, statBox, stat2Box, searchBox }) do box:ClearFocus() end
         ResetForm()
     end)
 
@@ -597,9 +886,23 @@ local function Build(p)
     end
 
     -- Enter submits
-    for _, box in ipairs({ qtyBox, noteBox, goldBox, silverBox, copperBox }) do
+    for _, box in ipairs({ qtyBox, noteBox, goldBox, silverBox, copperBox, levelBox, statBox, stat2Box }) do
         box:SetScript("OnEnterPressed", function(self) self:ClearFocus(); Submit() end)
     end
+
+end
+
+local function BuildList()
+    -- Section break: the form above is for making a request, everything below is the
+    -- guild's list. A gold rule and a heading, with the filters on the heading's row.
+    local rule = panel:CreateTexture(nil, "ARTWORK")
+    rule:SetColorTexture(1, 0.82, 0, 0.45)
+    rule:SetHeight(1)
+    rule:SetPoint("TOPLEFT", form, "BOTTOMLEFT", 0, -8)
+    rule:SetPoint("TOPRIGHT", form, "BOTTOMRIGHT", 0, -8)
+    local heading = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    heading:SetPoint("TOPLEFT", rule, "BOTTOMLEFT", 6, -10)
+    heading:SetText("Guild requests")
 
     -- Filters
     local prev
@@ -611,7 +914,7 @@ local function Build(p)
         if prev then
             b:SetPoint("LEFT", prev, "RIGHT", 4, 0)
         else
-            b:SetPoint("TOPLEFT", form, "BOTTOMLEFT", 0, -6)
+            b:SetPoint("LEFT", heading, "RIGHT", 14, 0)
         end
         b:SetScript("OnClick", function(self)
             filter = self.key
@@ -640,7 +943,7 @@ local function Build(p)
 
     -- List
     scrollBox = CreateFrame("Frame", nil, panel, "WowScrollBoxList")
-    scrollBox:SetPoint("TOPLEFT", form, "BOTTOMLEFT", 0, -52)
+    scrollBox:SetPoint("TOPLEFT", form, "BOTTOMLEFT", 0, -64)
     scrollBox:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -22, 22)
     local scrollBar = CreateFrame("EventFrame", nil, panel, "MinimalScrollBar")
     scrollBar:SetPoint("TOPLEFT", scrollBox, "TOPRIGHT", 6, 0)
@@ -650,13 +953,26 @@ local function Build(p)
     view:SetElementInitializer("Button", InitRow)
     ScrollUtil.InitScrollBoxListWithScrollBar(scrollBox, scrollBar, view)
 
-    for _, col in ipairs(COLUMNS) do
+    for i, col in ipairs(COLUMNS) do
         local fs = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-        fs:SetPoint("BOTTOMLEFT", scrollBox, "TOPLEFT", col.x + 4, 6)
-        fs:SetWidth(col.width - 8)
         fs:SetJustifyH(col.justify or "LEFT")
         fs:SetText(col.label)
+        headerCells[i] = fs
     end
+    local function LayoutHeaders()
+        for i, col in ipairs(COLUMNS) do
+            local fs = headerCells[i]
+            fs:ClearAllPoints()
+            fs:SetPoint("BOTTOMLEFT", scrollBox, "TOPLEFT", col.x + 4, 6)
+            fs:SetWidth(col.w - 8)
+        end
+    end
+    ns.Columns.Watch(scrollBox, COLUMNS, function()
+        layoutVersion = layoutVersion + 1
+        LayoutHeaders()
+        scrollBox:ForEachFrame(LayoutRow)
+    end)
+    LayoutHeaders()
     local divider = panel:CreateTexture(nil, "ARTWORK")
     divider:SetColorTexture(1, 0.82, 0, 0.25)
     divider:SetHeight(1)
@@ -669,10 +985,49 @@ local function Build(p)
     countText = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     countText:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 8, 6)
 
+end
+
+local function Build(p)
+    panel = p
+
+    -- Form background
+    form = CreateFrame("Frame", nil, panel)
+    form:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -2)
+    form:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -4, -2)
+    form:SetHeight(FORM_HEIGHT.item)
+    form:SetFrameLevel(panel:GetFrameLevel() + 10)
+    local formBg = form:CreateTexture(nil, "BACKGROUND")
+    formBg:SetAllPoints()
+    formBg:SetColorTexture(0, 0, 0, 0.25)
+
+    -- Item / Rule switch
+    local prevMode
+    for _, m in ipairs({ { key = "item", label = "Item" }, { key = "rule", label = "Rule" } }) do
+        local b = CreateFrame("Button", nil, form, "UIPanelButtonTemplate")
+        b.key = m.key
+        b:SetSize(56, 20)
+        b:SetText(m.label)
+        if prevMode then b:SetPoint("LEFT", prevMode, "RIGHT", 4, 0) else b:SetPoint("TOPLEFT", form, "TOPLEFT", 8, -6) end
+        b:SetScript("OnClick", function(self) SetMode(self.key) end)
+        modeButtons[#modeButtons + 1] = b
+        prevMode = b
+    end
+    local modeHint = form:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    modeHint:SetPoint("LEFT", prevMode, "RIGHT", 10, 0)
+    modeHint:SetText("Item: one specific item.  Rule: any gear that fits.")
+
+    BuildItemPane()
+    BuildRulePane()
+    BuildQtyNoteAndPayment()
+    BuildList()
+
     ns:RegisterCallback("WISHLIST_CHANGED", function() if panel:IsVisible() then Refresh() end end)
     panel:SetScript("OnShow", Refresh)
 
+    panel:HookScript("OnHide", HidePickList)
+
     ResetForm()
+    SetMode("item")
     Refresh()
 end
 

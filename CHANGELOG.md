@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Wishlist item search:** type an item name (or ID) and pick it from the list: common mats and leveling items, items seen in your bags, and items already on the wishlist.
+- **Rule requests:** ask for any gear that fits (armor type, slot, minimum required level, one stat with a minimum, optionally a second stat). Always for one item. They sync to the guild, can be claimed, and items from the mailbox that fit count toward them.
+- **History tab:** your own items received and items sent through the wishlist, plus an optional view of all completed guild requests.
+- **Helped** column on the guild tab: how many times each member delivered wishlist items to a guildmate.
+
+### Changed
+- List columns now follow the window size: Item, Note, Zone and Rank grow, other columns stay sized to their content (Requester fits full two-part names).
+
+### Removed
+- The farming warning and its setting ("Most killed by" stays).
+
+### Fixed
+- PvP stats of your other characters on the same account now show on the roster (your own numbers are saved account-wide, since those characters are never online together).
+- PvP stats are now sent again when a guildmate logs in or presses Sync, so whoever logs in later still sees everyone's numbers.
+
 ## [0.2.0] - 2026-11-14
 
 ### Added

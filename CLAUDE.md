@@ -29,7 +29,8 @@ Read SPEC.md for features. This file is how to build them.
 - `Core.lua` — namespace, events, saved variables, slash command `/tavern`
 - `Comm.lua` — guild addon messaging + sync (merge by timestamp)
 - `UI\MainFrame.lua` — the Unc's Tavern window, swapped with the guild window (J) via the portrait icon; bottom tabs ([Guild name], Wishlist, Settings); each tab is a module
-- `Modules\Roster.lua`, `Modules\Wishlist.lua`, `Modules\Mail.lua`, `Modules\Alerts.lua`, `Modules\LevelUp.lua`, `Modules\PvPStats.lua`
+- `UI\Columns.lua` — column widths that follow the window size (shared by lists)
+- `Modules\Roster.lua`, `Modules\Wishlist.lua`, `Modules\History.lua`, `Modules\Mail.lua`, `Modules\Alerts.lua`, `Modules\LevelUp.lua`, `Modules\PvPStats.lua`
 - `Media\` — icon (.tga)
 - New features = new file in `Modules\` registering a tab or hooks. Don't edit other modules to add one.
 

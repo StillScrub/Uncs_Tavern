@@ -1,5 +1,5 @@
--- Modules\AutoComplete.lua: when items you requested arrive by mail, your request's
--- "received" count goes up; when it reaches the quantity, the request is done and
+-- Modules\AutoComplete.lua: when items you requested arrive by mail (or items that
+-- fit one of your rule requests), your request's "received" count goes up; when it reaches the quantity, the request is done and
 -- disappears for everyone (the change syncs like any other edit).
 --
 -- How: post-hooks on TakeInboxItem / AutoLootMailItem (they never block or change
@@ -12,7 +12,7 @@ local W = ns.Wishlist
 local EXPIRE = 10
 local MAX_ATTACH = ATTACHMENTS_MAX_RECEIVE or 16
 
-local pending = {} -- { itemID, count, sender, before, time }
+local pending = {} -- { itemID, link, count, sender, before, time }
 local listening = false
 
 local function BagCount(itemID)
@@ -35,7 +35,8 @@ end
 local function NoteAttachment(mailIndex, attachIndex)
     local ok, _, itemID, _, count = pcall(GetInboxItem, mailIndex, attachIndex)
     if not ok or not itemID or not count or count < 1 then return end
-    if not W:WantsItem(itemID) then return end
+    local link = GetInboxItemLink and GetInboxItemLink(mailIndex, attachIndex)
+    if not W:WantsItem(itemID) and not (link and #W:MyRulesMatching(link) > 0) then return end
     local sender = select(3, GetInboxHeaderInfo(mailIndex))
     sender = sender and Ambiguate(sender, "guild") or nil
     -- Several attachments of the same item: they share one "before" count.
@@ -43,7 +44,7 @@ local function NoteAttachment(mailIndex, attachIndex)
     for _, p in ipairs(pending) do
         if p.itemID == itemID then before = p.before break end
     end
-    pending[#pending + 1] = { itemID = itemID, count = count, sender = sender, before = before, time = GetTime() }
+    pending[#pending + 1] = { itemID = itemID, link = link, count = count, sender = sender, before = before, time = GetTime() }
     Listen(true)
 end
 
@@ -63,6 +64,9 @@ OnBagsChanged = function()
         if got > 0 then
             arrived[p.itemID] = avail - got
             local counted = W:AddReceived(p.itemID, got, p.sender)
+            if counted < got and p.link then
+                counted = counted + W:AddReceivedRule(p.link, got - counted, p.sender)
+            end
             if counted > 0 then
                 local name = C_Item.GetItemInfo(p.itemID) or ("item " .. p.itemID)
                 ns:Print(("Wishlist: +%d %s%s."):format(counted, name, p.sender and (" from " .. p.sender) or ""))

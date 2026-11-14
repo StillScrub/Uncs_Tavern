@@ -9,6 +9,7 @@
 -- Optional providers other modules can set later (no edits needed here):
 --   ns.PvPStats:Get(fullName) -> kills, deaths, dishonorableKills   (nil = member has no data)
 --   ns.PvPStats:AddTooltip(tooltip, fullName)     extra row-tooltip lines
+--   ns.History:HelpedCount(fullName) -> n          wishlist deliveries (nil = no data)
 --   ns.Comm:CountAddonUsers() -> number
 local _, ns = ...
 
@@ -18,23 +19,24 @@ local DASH       = "—"
 local THROTTLE   = 2 -- seconds between roster rebuilds
 
 local COLUMNS = {
-    { key = "name",   label = "Name",          width = 175 },
-    { key = "level",  label = "Level",         width = 42,  justify = "CENTER" },
-    { key = "zone",   label = "Zone / Status", width = 150 },
-    { key = "rank",   label = "Rank",          width = 105 },
+    { key = "name",   label = "Name",          width = 165 },
+    { key = "level",  label = "Level",         width = 40,  justify = "CENTER" },
+    { key = "zone",   label = "Zone / Status", width = 115, flex = 3 },
+    { key = "rank",   label = "Rank",          width = 85,  flex = 2 },
     { key = "kills",  label = "Kills",         width = 52,  justify = "CENTER",
       tip = "Honorable kills, lifetime (includes assists)." },
     { key = "deaths", label = "Deaths",        width = 52,  justify = "CENTER",
       tip = "Deaths to players. Lifetime when the game tracks it; otherwise deaths tracked since installing Unc's Tavern." },
     { key = "kd",     label = "K/D",           width = 48,  justify = "CENTER",
       tip = "Kills / Deaths (deaths count as at least 1)." },
-    { key = "dk",     label = "Dishonorable",  width = 80,  justify = "CENTER",
+    { key = "dk",     label = "Dishonorable",  width = 78,  justify = "CENTER",
       tip = "Killing blows on players too low level to give honor, since installing Unc's Tavern. Not part of K/D." },
+    { key = "helped", label = "Helped",        width = 52,  justify = "CENTER",
+      tip = "Times they delivered wishlist items to a guildmate (counted when the requester takes them from the mailbox)." },
 }
-do
-    local x = 0
-    for _, col in ipairs(COLUMNS) do col.x = x; x = x + col.width end
-end
+-- Zone and Rank grow with the window; the rest stay sized to their content.
+ns.Columns.Layout(COLUMNS, 0)
+local layoutVersion = 0
 
 local panel, scrollBox, dataProvider, searchBox, offlineCheck, footer, emptyText
 local headers = {}
@@ -115,6 +117,7 @@ local function ReadRoster()
                 m.offlineMins = ((y or 0) * 365 * 24 + (mo or 0) * 30 * 24 + (d or 0) * 24 + (h or 0)) * 60
                 m.zoneText = isMobile and "Remote Chat" or OfflineText(m.offlineMins)
             end
+            if ns.History then m.helped = ns.History:HelpedCount(full) end
             if pvp and pvp.Get then
                 m.kills, m.deaths, m.dk = pvp:Get(full)
                 if m.kills and m.deaths then
@@ -136,6 +139,7 @@ local SORTERS = {
     deaths = function(m) return m.deaths end,
     kd     = function(m) return m.kd end,
     dk     = function(m) return m.dk end,
+    helped = function(m) return m.helped end,
 }
 
 local function Sorted(list)
@@ -173,6 +177,18 @@ local function RowOnEnter(row)
     GameTooltip:Show()
 end
 
+-- Places a row's cells for the current column widths.
+local function LayoutRow(row)
+    for i, col in ipairs(COLUMNS) do
+        local pad = (i == 1) and (ICON_SIZE + 8) or 4 -- name cell makes room for the icon
+        local fs = row.cells[i]
+        fs:ClearAllPoints()
+        fs:SetPoint("LEFT", row, "LEFT", col.x + pad, 0)
+        fs:SetWidth(col.w - pad - 4)
+    end
+    row.layoutVersion = layoutVersion
+end
+
 local function InitRow(row, m)
     if not row.cells then
         row.bg = row:CreateTexture(nil, "BACKGROUND")
@@ -185,9 +201,6 @@ local function InitRow(row, m)
         row.classIcon:SetPoint("LEFT", row, "LEFT", 4, 0)
         for i, col in ipairs(COLUMNS) do
             local fs = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-            local pad = (i == 1) and (ICON_SIZE + 8) or 4 -- name cell makes room for the icon
-            fs:SetPoint("LEFT", row, "LEFT", col.x + pad, 0)
-            fs:SetWidth(col.width - pad - 4)
             fs:SetJustifyH(col.justify or "LEFT")
             fs:SetWordWrap(false)
             row.cells[i] = fs
@@ -195,6 +208,7 @@ local function InitRow(row, m)
         row:SetScript("OnEnter", RowOnEnter)
         row:SetScript("OnLeave", GameTooltip_Hide)
     end
+    if row.layoutVersion ~= layoutVersion then LayoutRow(row) end
     row.data = m
     row.bg:SetShown(m.index % 2 == 0)
 
@@ -210,6 +224,7 @@ local function InitRow(row, m)
     cells[6]:SetText(m.deaths or DASH)
     cells[7]:SetText(m.kd and ("%.2f"):format(m.kd) or DASH)
     cells[8]:SetText(m.dk or DASH)
+    cells[9]:SetText(m.helped or DASH)
 
     local grey = not m.online
     for i = 2, #cells do
@@ -342,8 +357,8 @@ local function Build(p)
     for _, col in ipairs(COLUMNS) do
         local h = CreateFrame("Button", nil, panel)
         h.key = col.key
-        h:SetSize(col.width, 20)
-        h:SetPoint("BOTTOMLEFT", scrollBox, "TOPLEFT", col.x, 4)
+        h.col = col
+        h:SetHeight(20)
         h:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
         local fs = h:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
         fs:SetPoint("LEFT", h, "LEFT", 4, 0)
@@ -421,6 +436,21 @@ local function Build(p)
     ns:RegisterEvent("PLAYER_GUILD_UPDATE", OnRosterEvent)
     ns:RegisterCallback("ADDON_USERS_CHANGED", OnRosterEvent)
     ns:RegisterCallback("PVP_STATS_CHANGED", OnRosterEvent)
+    ns:RegisterCallback("HELPED_CHANGED", OnRosterEvent)
+
+    local function LayoutHeaders()
+        for _, h in ipairs(headers) do
+            h:ClearAllPoints()
+            h:SetWidth(h.col.w)
+            h:SetPoint("BOTTOMLEFT", scrollBox, "TOPLEFT", h.col.x, 4)
+        end
+    end
+    ns.Columns.Watch(scrollBox, COLUMNS, function()
+        layoutVersion = layoutVersion + 1
+        LayoutHeaders()
+        scrollBox:ForEachFrame(LayoutRow)
+    end)
+    LayoutHeaders()
 
     panel:SetScript("OnShow", function()
         RequestRoster()

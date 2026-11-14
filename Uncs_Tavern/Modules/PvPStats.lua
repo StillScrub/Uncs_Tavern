@@ -20,8 +20,7 @@
 --   killer (so they got no honor). The recap has no levels, so at PLAYER_DEAD we note the
 --   levels of nearby enemy players we can see (target, focus, mouseover, nameplates) and
 --   match the killer's GUID; if the killer's level is unknown, it isn't counted.
---   Per-killer counts feed "Most killed by" and the farming warning (same player kills
---   me FARM_KILLS times within FARM_WINDOW).
+--   Per-killer counts feed "Most killed by".
 --
 -- SHARING (UNCST, throttled through Comm's queue):
 --   1|P|<hk>|<deaths>|<deathsLifetime 1/0>|<dishonorableKills>|<killingBlows>|<topKiller>|<topCount>|<dishonorableDeaths>
@@ -40,11 +39,8 @@ local STAT_HK, STAT_PVP_DEATHS = 588, 1501
 local HONOR_WINDOW   = 1.5     -- seconds between a killing blow and its honor signal
 local CONFIRM_DELAY  = 4       -- seconds after PLAYER_DEAD to confirm a real death
 local DUEL_WINDOW    = 6       -- seconds around a duel's end in which deaths are ignored
-local FARM_KILLS     = 3
-local FARM_WINDOW    = 30 * 60
 local SHARE_LOGIN    = 15
 local SHARE_CHANGED  = 60
-local MAX_RECENT     = 10      -- kill times kept per killer (for the farming check)
 
 local lastHonorSignal = -100   -- GetTime() of the last honor signal
 local lastHonorEvent           -- text for /tavern pvpdebug
@@ -115,14 +111,29 @@ end
 ---------------------------------------------------------------------------
 -- Sharing
 ---------------------------------------------------------------------------
-local function ShareNow()
-    sharePending = false
-    if not (IsInGuild() and ns.Comm) then return end
+-- My current numbers, in the same shape guildmates' shared stats are stored in.
+local function OwnRecord()
     local p = Mine()
     local deaths, lifetime = PvP:Deaths()
     local top, topN = PvP:TopKiller()
-    ns.Comm:Send("P", PvP:HonorableKills(), deaths, lifetime and 1 or 0,
-        p.dishonorableKills or 0, p.killingBlows or 0, top or "", topN or 0, p.dishonorableDeaths or 0)
+    return { hk = PvP:HonorableKills(), deaths = deaths, lifetime = lifetime,
+             dk = p.dishonorableKills or 0, kb = p.killingBlows or 0, dd = p.dishonorableDeaths or 0,
+             top = top, topN = topN, t = time() }
+end
+
+-- Also keep my numbers in the account-wide store, so my other characters on this
+-- account (never online at the same time) see them too.
+local function SaveOwn()
+    local store = GuildStore()
+    if store then store[Short(ns:PlayerName())] = OwnRecord() end
+end
+
+local function ShareNow()
+    sharePending = false
+    if not (IsInGuild() and ns.Comm) then return end
+    local r = OwnRecord()
+    SaveOwn()
+    ns.Comm:Send("P", r.hk, r.deaths, r.lifetime and 1 or 0, r.dk, r.kb, r.top or "", r.topN or 0, r.dd)
 end
 
 local function ScheduleShare(delay)
@@ -132,6 +143,7 @@ local function ScheduleShare(delay)
 end
 
 local function Changed()
+    SaveOwn()
     ns:Fire("PVP_STATS_CHANGED")
     ScheduleShare(SHARE_CHANGED)
 end
@@ -150,7 +162,11 @@ if ns.Comm then
     end)
 end
 
--- Someone pressed Sync, or a new addon user appeared: send ours soon (random spread).
+-- Someone logged in or pressed Sync (their hello asks "Q"), I pressed Sync, or a new
+-- addon user appeared: send ours soon (random spread, so answers don't all arrive at once).
+ns:RegisterCallback("HELLO", function(_, _, flag)
+    if flag == "Q" then ScheduleShare(2 + math.random() * 6) end
+end)
 ns:RegisterCallback("SYNC_REQUESTED", function() ScheduleShare(3 + math.random() * 5) end)
 ns:RegisterCallback("ADDON_USERS_CHANGED", function() ScheduleShare(3 + math.random() * 5) end)
 
@@ -296,20 +312,6 @@ local function IsPlayerSource(e)
     return type(flags) == "number" and bit.band(flags, PLAYER_CONTROLLED) ~= 0
 end
 
-local function FarmCheck(name, k)
-    local now = time()
-    local recent = 0
-    for _, t in ipairs(k.times) do
-        if now - t <= FARM_WINDOW then recent = recent + 1 end
-    end
-    if recent >= FARM_KILLS and ns.db.settings.farmWarning and now - (k.warned or 0) > FARM_WINDOW then
-        k.warned = now
-        ns:Print(("|cffff4040%s has killed you %d times in the last %d minutes.|r"):format(
-            name, recent, FARM_WINDOW / 60))
-        if SOUNDKIT and SOUNDKIT.RAID_WARNING then PlaySound(SOUNDKIT.RAID_WARNING) end
-    end
-end
-
 local function RecordDeath(deathAt)
     local p = Mine()
     if not UnitIsDeadOrGhost("player") then
@@ -340,13 +342,11 @@ local function RecordDeath(deathAt)
     p.lastDeath = { t = time(), killer = killer, spell = spell,
         result = ("PvP death counted (%s%s), %s"):format(kind,
             killerLevel and (", killer level " .. killerLevel) or "", how) }
-    local k = p.killers[killer] or { count = 0, times = {} }
+    local k = p.killers[killer] or { count = 0 }
     p.killers[killer] = k
     k.count = k.count + 1
     k.last = time()
-    table.insert(k.times, time())
-    while #k.times > MAX_RECENT do table.remove(k.times, 1) end
-    FarmCheck(killer, k)
+    k.times, k.warned = nil, nil -- left over from the removed farming warning
     Changed()
 end
 
@@ -407,8 +407,10 @@ end
 ---------------------------------------------------------------------------
 -- Setup
 ---------------------------------------------------------------------------
+ns:RegisterEvent("PLAYER_LOGOUT", SaveOwn)
 ns:RegisterEvent("PLAYER_LOGIN", function()
     if RequestPVPRewardsUpdate then pcall(RequestPVPRewardsUpdate) end
+    C_Timer.After(5, SaveOwn) -- statistics are readable a moment after login
     C_Timer.After(SHARE_LOGIN, function() ScheduleShare(0) end)
 end)
 ns:RegisterEvent("PLAYER_PVP_KILLS_CHANGED", OnPvPKillsChanged)
@@ -417,13 +419,6 @@ ns:RegisterEvent("PARTY_KILL", OnPartyKill)
 ns:RegisterEvent("PLAYER_DEAD", OnPlayerDead)
 ns:RegisterEvent("DUEL_FINISHED", function() duelEndedAt = GetTime() end)
 
-ns.Settings:RegisterToggle({
-    key = "farmWarning",
-    label = "Warn me when someone keeps killing me",
-    description = ("A chat warning when the same player kills you %d times within %d minutes."):format(
-        FARM_KILLS, FARM_WINDOW / 60),
-    order = 20,
-})
 
 ---------------------------------------------------------------------------
 -- /tavern pvpdebug
@@ -454,7 +449,11 @@ ns:RegisterCommand("pvpdebug", function()
         tostring(d.spell or "?"), d.result) or "none"))
     local top, topN = PvP:TopKiller()
     out("Most killed by: " .. (top and ("%s (%d)"):format(top, topN) or "nobody"))
-    local store, n = GuildStore(), 0
-    for _ in pairs(store or {}) do n = n + 1 end
-    out(("Guildmates' stats received: %d"):format(n))
+    local store, names = GuildStore(), {}
+    for name, s in pairs(store or {}) do
+        names[#names + 1] = ("%s (%s K / %s D, %s)"):format(name, tostring(s.hk), tostring(s.deaths), When(s.t))
+    end
+    table.sort(names)
+    out(("Guildmates' stats received: %d"):format(#names))
+    for _, line in ipairs(names) do out("  " .. line) end
 end, "show PvP kill/death numbers and the last signals")
