@@ -21,4 +21,5 @@ Modules\History.lua
 Modules\Settings.lua
 Modules\LevelUp.lua
 Modules\MinimapButton.lua
+Modules\Alerts.lua
 Modules\PvPStats.lua

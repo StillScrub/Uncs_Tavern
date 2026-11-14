@@ -118,6 +118,7 @@ local DEFAULTS = {
         vendorPopup   = true,
         tooltipLines  = true,
         minimapButton = true,
+        minimapBadge  = true,
     },
     wishlist = {},
     roster   = {},

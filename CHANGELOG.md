@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rule requests:** ask for any gear that fits (armor type, slot, minimum required level, one stat with a minimum, optionally a second stat). Always for one item. They sync to the guild, can be claimed, and items from the mailbox that fit count toward them.
 - **History tab:** your own items received and items sent through the wishlist, plus an optional view of all completed guild requests.
 - **Helped** column on the guild tab: how many times each member delivered wishlist items to a guildmate.
+- **Alerts:** item tooltips show who in the guild wants that item ("Wanted by <name>: N more"); a popup at vendors, the auction house and the mailbox lists bag items that fill guildmates' requests; selling such an item to a vendor warns you and points to the Buyback tab; a badge on the minimap button counts new requests until you open the Wishlist tab. Each can be turned off in Settings.
 
 ### Changed
 - List columns now follow the window size: Item, Note, Zone and Rank grow, other columns stay sized to their content (Requester fits full two-part names).

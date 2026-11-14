@@ -50,10 +50,11 @@ A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but
 - Shared stats (PvP `P`, Helped `WH`) are sent at login, after changes, and in answer to any guildmate's login/Sync hello, so whoever logs in later still gets everyone's numbers. Your own numbers are also saved in the account-wide store, so your other characters on the same account (never online together) see them.
 - Checkbox **Show all completed guild requests** (off by default, not saved): every fulfilled request this client knows (kept 30 days), with who sent what.
 
-## 4. Alerts (planned)
-- **Bag tooltip:** extra lines on wanted items — "Wanted by <name>: N more · price".
-- **Popup on opening a vendor, auction house or mailbox:** "N items in your bags are on the guild wishlist" with Show me / Not now. Never blocks selling.
-- **Minimap button:** badge when new requests arrive.
+## 4. Alerts
+- **Item tooltips:** extra lines on wanted items (item and rule requests) — "Wanted by <name>: N more · price"; your own requests show as "On your wishlist: N more". Up to 4 lines, then "+N more".
+- **Popup on opening a vendor, auction house or mailbox:** "N items in your bags are on the guild wishlist", listing up to 6 (item ×count -> requester · price), with Show me (opens the Wishlist tab) / Not now. Only guildmates' requests, only unbound items, capped at what's still unclaimed. Our own non-modal frame at the top of the screen; never blocks selling. Shows every time one of those windows opens.
+- **Sell warning:** selling an item a guildmate asked for gives a red on-screen + chat message pointing to the vendor's Buyback tab. Detected afterwards from the buyback list; the sale is never stopped.
+- **Minimap button:** red badge with the number of guildmates' requests created since you last opened the Wishlist tab (per character).
 
 ## 5. Mailbox "Guild Requests" tab (planned)
 - New tab next to Inbox / Send Mail.
@@ -68,7 +69,7 @@ A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but
 - Only players with the addon post their own level-ups.
 
 ## 7. Settings tab
-- Toggles: level-up posts, minimap button. Planned: vendor/AH/mail popup, tooltip lines.
+- Toggles: level-up posts, tooltip lines, vendor/AH/mail popup, minimap badge, minimap button.
 
 ## Out of scope
 - Gear upgrade detection (dropped).

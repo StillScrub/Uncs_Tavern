@@ -190,6 +190,7 @@ local function SelectTab(index)
                 if t.build then t.build(t.panel) end
             end
             t.panel:Show()
+            ns:Fire("TAB_SHOWN", t.key)
         elseif t.panel then
             t.panel:Hide()
         end
