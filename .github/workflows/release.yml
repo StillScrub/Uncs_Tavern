@@ -1,0 +1,66 @@
+# Builds a release when a version tag (e.g. v0.2.0) is pushed.
+# The zip contains ONLY the Uncs_Tavern/ addon folder, unchanged, so extracting
+# it into Interface\AddOns gives AddOns\Uncs_Tavern\Uncs_Tavern.toc.
+# Release notes come from that version's section in CHANGELOG.md.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@v4
+
+      - name: Read version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check the .toc version matches the tag
+        run: |
+          TOC_VERSION=$(grep -m1 '^## Version:' Uncs_Tavern/Uncs_Tavern.toc | sed 's/^## Version:[[:space:]]*//' | tr -d '\r[:space:]')
+          if [ "$TOC_VERSION" != "${{ steps.version.outputs.version }}" ]; then
+            echo "::error::Tag ${{ steps.version.outputs.tag }} does not match '## Version: ${TOC_VERSION}' in Uncs_Tavern.toc"
+            exit 1
+          fi
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          awk -v ver="$VERSION" '
+            index($0, "## [" ver "]") == 1 { found = 1; next }
+            found && /^## \[/       { exit }
+            found && /^\[[^]]+\]: / { exit }
+            found                   { print }
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ] || ! grep -q '[^[:space:]]' release_notes.md; then
+            echo "::error::No '## [${VERSION}]' section found in CHANGELOG.md"
+            exit 1
+          fi
+          cat release_notes.md
+
+      - name: Zip the addon folder
+        run: |
+          ZIP="Uncs_Tavern-${{ steps.version.outputs.tag }}.zip"
+          zip -r -X "$ZIP" Uncs_Tavern
+          unzip -l "$ZIP"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" "$ZIP" \
+            --title "Unc's Tavern ${{ steps.version.outputs.tag }}" \
+            --notes-file release_notes.md \
+            --verify-tag

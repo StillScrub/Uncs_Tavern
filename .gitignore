@@ -1,3 +1,6 @@
 *.zip
 .vscode/
 Thumbs.db
+.DS_Store
+.idea/
+WTF/

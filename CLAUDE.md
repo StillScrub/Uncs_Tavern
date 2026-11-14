@@ -43,3 +43,6 @@ Read SPEC.md for features. This file is how to build them.
 - After each change, tell me exactly what to test in-game (`/reload`, what to click, what I should see).
 - I'll paste BugSack errors; fix the root cause, not the symptom.
 - Commit with git after each working feature with a clear message.
+
+## Releases
+To release: update CHANGELOG.md and the .toc version, commit, tag vX.Y.Z, push the commit and the tag. When I say 'release vX.Y.Z', do all of this.
