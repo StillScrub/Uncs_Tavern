@@ -23,11 +23,15 @@
 --   Per-killer counts feed "Most killed by".
 --
 -- SHARING (UNCST, throttled through Comm's queue):
---   1|P|<hk>|<deaths>|<deathsLifetime 1/0>|<dishonorableKills>|<killingBlows>|<topKiller>|<topCount>|<dishonorableDeaths>
+--   2|P|<hk>|<deaths>|<deathsLifetime 1/0>|<dishonorableKills>|<killingBlows>|<topKiller>|<topCount>|<dishonorableDeaths>
 --   (fields are only ever appended; older clients ignore extra ones)
 --   Sent ~15 s after login, at most once a minute after changes, and shortly after a
---   Sync or when a new addon user shows up. Stored per guild; newer wins; my own row
---   always comes from my local numbers.
+--   Sync or when a new addon user shows up. Only when PvP sharing is on.
+--   SELF-REPORTED: each player sends only their own numbers, stored under the sender's
+--   (server-set) name. Every number must be a whole number in 0..MAX_STAT, the killer
+--   name is cleaned; anything else drops the message. Shown as "self-reported".
+--   My own row always comes from my local numbers. My other characters on this account
+--   are saved in the same account-wide store, locally only (never sent).
 --
 -- Event-driven only (no combat log, no polling); timers are one-shots.
 local _, ns = ...
@@ -41,6 +45,7 @@ local CONFIRM_DELAY  = 4       -- seconds after PLAYER_DEAD to confirm a real de
 local DUEL_WINDOW    = 6       -- seconds around a duel's end in which deaths are ignored
 local SHARE_LOGIN    = 15
 local SHARE_CHANGED  = 60
+local MAX_STAT       = 10000000
 
 local lastHonorSignal = -100   -- GetTime() of the last honor signal
 local lastHonorEvent           -- text for /tavern pvpdebug
@@ -130,7 +135,7 @@ end
 
 local function ShareNow()
     sharePending = false
-    if not (IsInGuild() and ns.Comm) then return end
+    if not (IsInGuild() and ns.Comm and ns.Comm:IsSharing("pvp")) then return end
     local r = OwnRecord()
     SaveOwn()
     ns.Comm:Send("P", r.hk, r.deaths, r.lifetime and 1 or 0, r.dk, r.kb, r.top or "", r.topN or 0, r.dd)
@@ -152,14 +157,12 @@ if ns.Comm then
     ns.Comm:RegisterHandler("P", function(sender, hk, deaths, lifetime, dk, kb, top, topN, dd)
         local store = GuildStore()
         if not store then return end
-        store[sender] = {
-            hk = tonumber(hk), deaths = tonumber(deaths), lifetime = lifetime == "1",
-            dk = tonumber(dk), kb = tonumber(kb), dd = tonumber(dd),
-            top = (top and top ~= "") and top or nil, topN = tonumber(topN),
-            t = time(),
-        }
+        local rec = PvP:CleanRecord({ hk = hk, deaths = deaths, lifetime = lifetime == "1", dk = dk, kb = kb,
+                                      dd = dd, top = top, topN = topN, t = time() })
+        if not rec then return end
+        store[sender] = rec
         ns:Fire("PVP_STATS_CHANGED")
-    end)
+    end, "pvp")
 end
 
 -- Someone logged in or pressed Sync (their hello asks "Q"), I pressed Sync, or a new
@@ -168,6 +171,9 @@ ns:RegisterCallback("HELLO", function(_, _, flag)
     if flag == "Q" then ScheduleShare(2 + math.random() * 6) end
 end)
 ns:RegisterCallback("SYNC_REQUESTED", function() ScheduleShare(3 + math.random() * 5) end)
+ns:RegisterCallback("SHARING_CHANGED", function(_, field, value)
+    if value and (field == "optIn" or field == "pvp") then ScheduleShare(5) end
+end)
 ns:RegisterCallback("ADDON_USERS_CHANGED", function() ScheduleShare(3 + math.random() * 5) end)
 
 ---------------------------------------------------------------------------
@@ -360,6 +366,37 @@ end
 -- Provider for the roster
 ---------------------------------------------------------------------------
 -- kills, deaths, dishonorableKills for a roster name (nil = no data).
+-- A shared stats record with every number checked (0..MAX_STAT, whole), or nil.
+function PvP:CleanRecord(r)
+    if type(r) ~= "table" then return nil end
+    local out = { lifetime = r.lifetime == true, t = ns:Int(r.t, 0) or time() }
+    for _, k in ipairs({ "hk", "deaths", "dk", "kb", "dd", "topN" }) do
+        local v = r[k]
+        if v == nil or v == "" then
+            v = 0
+        else
+            v = ns:Int(v, 0, MAX_STAT)
+            if not v then return nil end
+        end
+        out[k] = v
+    end
+    local top = ns:CleanText(r.top, 48)
+    out.top = top ~= "" and top or nil
+    return out
+end
+
+ns:RegisterCallback("VALIDATE_DB", function()
+    for key, store in pairs(ns.db.pvp) do
+        if type(store) ~= "table" then
+            ns.db.pvp[key] = nil
+        else
+            for name, r in pairs(store) do
+                store[name] = ns:ValidName(name) and PvP:CleanRecord(r) or nil
+            end
+        end
+    end
+end)
+
 function PvP:Get(fullName)
     local name = Short(fullName)
     if IsMe(name) then
@@ -389,7 +426,7 @@ function PvP:AddTooltip(tooltip, fullName)
         dk, dd = s.dk or s.nhk, s.dd
     end
     tooltip:AddLine(" ")
-    tooltip:AddLine("PvP", 1, 0.82, 0)
+    tooltip:AddLine(IsMe(name) and "PvP" or "PvP |cff808080(self-reported)|r", 1, 0.82, 0)
     local function Line(label, value, note)
         tooltip:AddDoubleLine(label, tostring(value or 0) .. (note and ("  |cff808080" .. note .. "|r") or ""),
             0.8, 0.8, 0.8, 1, 1, 1)

@@ -40,10 +40,52 @@ end
 
 -- Key for per-guild data ("Guild Name@Realm"), or nil when not in a guild.
 -- The guild is detected at runtime; nothing is hardcoded.
+-- /tavern securitytest swaps in a throwaway key (ns.testGuildKey) while it runs.
 function ns:GuildKey()
+    if ns.testGuildKey then return ns.testGuildKey end
     local guild = IsInGuild() and GetGuildInfo("player")
     if not guild then return nil end
     return guild .. "@" .. (GetRealmName() or "")
+end
+
+---------------------------------------------------------------------------
+-- Validation of anything that came from another player (or from saved data).
+-- Message content is never trusted: see "Security rules" in CLAUDE.md.
+---------------------------------------------------------------------------
+-- Integer in [min, max], or nil.
+function ns:Int(v, min, max)
+    v = tonumber(v)
+    if not v or v ~= v or v ~= math.floor(v) then return nil end
+    if (min and v < min) or (max and v > max) then return nil end
+    return v
+end
+
+-- Plain text: every "|" escape (colors, links, textures, atlases...) and control
+-- character removed, trimmed, capped at max characters.
+function ns:CleanText(text, max)
+    if type(text) ~= "string" then return "" end
+    text = text:gsub("|", ""):gsub("[%c]", "")
+    text = strtrim(text)
+    if max and #text > max then text = text:sub(1, max) end
+    return text
+end
+
+-- For text that ends up inside a format pattern or a gsub replacement.
+function ns:EscapePercent(text)
+    return (tostring(text or ""):gsub("%%", "%%%%"))
+end
+
+-- A real class token ("WARRIOR"...), or nil.
+function ns:ValidClass(class)
+    if type(class) ~= "string" or class == "" then return nil end
+    if RAID_CLASS_COLORS and RAID_CLASS_COLORS[class] then return class end
+    return nil
+end
+
+-- A character name as Ambiguate(name, "guild") gives it: no escapes, sane length.
+function ns:ValidName(name)
+    if type(name) ~= "string" or name == "" or #name > 64 or name:find("[|%c:,]") then return nil end
+    return name
 end
 
 function ns:PlayerClass()
@@ -109,7 +151,7 @@ end
 ---------------------------------------------------------------------------
 -- Saved variables (with dbVersion + migrations)
 ---------------------------------------------------------------------------
-local DB_VERSION      = 1
+local DB_VERSION      = 2
 local CHAR_DB_VERSION = 2
 
 local DEFAULTS = {
@@ -119,23 +161,36 @@ local DEFAULTS = {
         tooltipLines  = true,
         minimapButton = true,
         minimapBadge  = true,
+        requestExpiryDays = 14, -- forget other players' requests after this many days unseen
+        debug         = false,  -- enables /tavern securitytest
     },
+    -- [guildKey] = { optIn = true|false, asked = true, wishlist = true, pvp = true, helped = true }
+    sharing  = {},
+    helpedLedger = {}, -- [guildKey][receiver .. "|" .. reqId .. "|" .. helper] = { ... } (History.lua)
     wishlist = {},
     roster   = {},
     pvp      = {}, -- [guildKey][name] = guildmates' shared PvP stats
     seenItems = {}, -- [itemID] = true, items seen in bags (wishlist search)
-    helped   = {}, -- [guildKey][name] = guildmates' shared "Helped" counts
 }
 
 local CHAR_DEFAULTS = {
     -- My own PvP tracking (Modules\PvPStats.lua). Lifetime honorable kills come from the game.
     pvp = { deaths = 0, dishonorableKills = 0, dishonorableDeaths = 0, killingBlows = 0, killers = {} },
-    -- My wishlist history (Modules\History.lua).
-    history = { entries = {} },
+    -- My wishlist history (Modules\History.lua): byGuild[guildKey] = { [key] = entry }.
+    history = { byGuild = {} },
 }
 
 -- MIGRATIONS[n] upgrades a db from version n-1 to n.
-local MIGRATIONS      = {}
+local MIGRATIONS      = {
+    -- 2 (security pass): self-reported Helped counts are no longer trusted; the old
+    -- catch-up bookkeeping is gone (no more relaying).
+    [2] = function(db)
+        db.helped = nil
+        for _, bucket in pairs(type(db.wishlist) == "table" and db.wishlist or {}) do
+            if type(bucket) == "table" then bucket.lastSync = nil end
+        end
+    end,
+}
 local CHAR_MIGRATIONS = {
     -- 2: "no-honor kills" renamed to "dishonorable kills".
     [2] = function(db)
@@ -149,7 +204,7 @@ local CHAR_MIGRATIONS = {
 
 local function ApplyDefaults(db, defaults)
     for k, v in pairs(defaults) do
-        if db[k] == nil then
+        if db[k] == nil or type(db[k]) ~= type(v) then
             db[k] = (type(v) == "table") and CopyTable(v) or v
         elseif type(v) == "table" and type(db[k]) == "table" then
             ApplyDefaults(db[k], v)
@@ -174,15 +229,17 @@ local function OnAddonLoaded(event, name)
     if name ~= ADDON_NAME then return end
     ns:UnregisterEvent("ADDON_LOADED", OnAddonLoaded)
 
-    UncsTavernDB = UncsTavernDB or {}
+    if type(UncsTavernDB) ~= "table" then UncsTavernDB = {} end
     Migrate(UncsTavernDB, DB_VERSION, MIGRATIONS)
     ApplyDefaults(UncsTavernDB, DEFAULTS)
     ns.db = UncsTavernDB
 
-    UncsTavernCharDB = UncsTavernCharDB or {}
+    if type(UncsTavernCharDB) ~= "table" then UncsTavernCharDB = {} end
     Migrate(UncsTavernCharDB, CHAR_DB_VERSION, CHAR_MIGRATIONS)
     ApplyDefaults(UncsTavernCharDB, CHAR_DEFAULTS)
     ns.charDB = UncsTavernCharDB
+    -- Modules check their own saved data (types, ranges, escape codes) on this callback.
+    ns:Fire("VALIDATE_DB")
 end
 ns:RegisterEvent("ADDON_LOADED", OnAddonLoaded)
 

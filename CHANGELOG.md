@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **Opt-in sharing per guild:** the first login in each guild asks "Enable Unc's Tavern sharing for <guild>?". Until you click Enable, nothing is sent or accepted. Settings has separate switches for Wishlist, PvP stats and Helped/History, a list of exactly what each shares, how long others' requests are kept (7/14/30/60 days unseen) and **Delete this guild's data**.
+- **No relaying:** players only send their own requests and claims; a request is accepted only from its requester and a claim only from its claimer. Owners re-announce their requests when they or a guildmate log in. Other players' requests expire after 14 days without hearing from them.
+- **Helped** now counts only receiver-confirmed deliveries (at most 3 per guildmate pair per day); the self-reported Helped count is gone.
+- Every incoming message is checked: guild channel only, senders must be on your guild roster, per-sender rate limit, all fields range-checked, escape codes (links, colors, textures) stripped from received text. Saved data is checked on load.
+- **COD warning** when a guildmate's mail asks more than your wishlist price for its items.
+- PvP stats are labelled "self-reported" and range-checked.
+- History is kept per guild; nothing from one guild is shown in another.
+- New message format (protocol 2): versions before 0.4.0 can't sync with this one, so everyone in the guild needs to update.
+- `/tavern securitytest` (developer check, after `/tavern debug on`).
+- SECURITY.md and a "Privacy & Safety" section in the README. The release workflow's checkout action is pinned to a commit.
+
+### Changed
+- Quantity is now 1-1000 per request (was 9999), required level for rules 1-60.
+
 ## [0.3.0] - 2026-11-14
 
 ### Added

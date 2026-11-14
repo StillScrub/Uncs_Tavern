@@ -1,19 +1,25 @@
 -- Modules\History.lua: your own wishlist history, and the "Helped" count on the roster.
 --
--- Worked out from the wishlist requests themselves: every request carries "received
--- from" per sender, filled in only when the requester takes the items from the mailbox
--- (AutoComplete). So:
+-- Worked out from the wishlist requests themselves. Every request carries "received
+-- from" per sender, booked only by the REQUESTER's own client when they take the items
+-- from the mailbox (AutoComplete), and only ever sent by the requester (no relaying,
+-- see WishlistSync.lua). So "received from" is the receiver's confirmation:
 --   Received = senders on MY requests.
---   Sent     = OTHER players' requests that list me as a sender.
+--   Sent     = OTHER players' requests whose requester confirmed me as a sender.
 -- Marking your own request as received by hand ("Got") doesn't add a sender, so it
--- never counts as received from anyone, and never counts toward anyone's Helped.
--- Entries are copied into charDB.history.entries, so they outlive the requests
--- (removed/finished requests are forgotten after 30 days). This also picks up
--- deliveries made before the History tab existed.
+-- never counts. Nobody can count their own help: a helper's claim never counts, and
+-- a requester listing themselves is dropped.
 --
--- Helped = how many guildmates' requests you delivered to. Shared as  1|WH|<helped>
--- (throttled: ~20 s after login, a minute after a change, and in answer to a
--- guildmate's login/Sync hello), stored per guild for the roster.
+-- Entries are copied into charDB.history.byGuild[guildKey] (max MAX_ENTRIES), so they
+-- outlive the requests.
+--
+-- HELPED: every client keeps a ledger of confirmations it has seen, per guild and
+-- account-wide: ns.db.helpedLedger[guildKey]["receiver|reqId|helper"] = { r, h, n, day, t }.
+-- Helped(helper) = number of confirmed requests, at most DAILY_CAP per receiver-helper
+-- pair per day. Nothing about Helped is sent separately: it travels inside the
+-- receiver's own requests. Players who install later see confirmations from the last
+-- requestExpiryDays days plus everything after, so counts can differ a little between
+-- players.
 --
 -- Tab: Items received | Items sent side by side. "Show all completed guild requests"
 -- (off every time you log in) swaps them for every fulfilled request this client knows.
@@ -23,19 +29,13 @@ local W = ns.Wishlist
 local History = {}
 ns.History = History
 
-local SHARE_LOGIN   = 20
-local SHARE_CHANGED = 60
-local SCAN_DELAY    = 1   -- coalesce bursts of wishlist changes into one scan
+local SCAN_DELAY  = 1    -- coalesce bursts of wishlist changes into one scan
+local DAILY_CAP   = 3    -- confirmations counted per receiver-helper pair per day
+local MAX_LEDGER  = 5000 -- confirmations kept per guild
+local MAX_ENTRIES = 500  -- history entries kept per guild per character
 
-local sharePending, scanPending = false, false
-
-local function Data()
-    local h = ns.charDB.history
-    h.entries = h.entries or {}
-    -- Lists from the first History version (event-logged); replaced by entries.
-    h.sent, h.received, h.deliveredTo = nil, nil, nil
-    return h
-end
+local scanPending = false
+local helpedCache -- [helper] = count, rebuilt when the ledger changes
 
 local function Short(name) return name and Ambiguate(name, "guild") or nil end
 
@@ -44,35 +44,70 @@ local function IsMe(name)
     return name == me or name == Short(me)
 end
 
+-- This character's entries for the current guild.
+local function Entries()
+    local key = ns:GuildKey()
+    if not key then return nil end
+    local h = ns.charDB.history
+    h.byGuild = type(h.byGuild) == "table" and h.byGuild or {}
+    if type(h.byGuild[key]) ~= "table" then h.byGuild[key] = {} end
+    -- Entries from before v0.4.0 weren't kept per guild: they belong to the current one.
+    if type(h.entries) == "table" then
+        for k, e in pairs(h.entries) do h.byGuild[key][k] = h.byGuild[key][k] or e end
+    end
+    h.entries, h.sent, h.received, h.deliveredTo = nil, nil, nil, nil
+    return h.byGuild[key]
+end
+
+local function Ledger()
+    local key = ns:GuildKey()
+    if not key then return nil end
+    if type(ns.db.helpedLedger[key]) ~= "table" then ns.db.helpedLedger[key] = {} end
+    return ns.db.helpedLedger[key]
+end
+
 -- What a request asks for, saved with the entry (so it survives the request's purge).
 local function Describe(req)
     if req.rule then return { rule = W:RuleText(req.rule), armor = req.rule.armor } end
     return { itemID = req.itemID }
 end
 
----------------------------------------------------------------------------
--- Scan the requests -> entries
----------------------------------------------------------------------------
-local function MyHelped()
-    local n = 0
-    for _, e in pairs(Data().entries) do
-        if e.kind == "sent" then n = n + 1 end
+local function Trim(t, max)
+    local n, oldest, oldestKey = 0, nil, nil
+    for _ in pairs(t) do n = n + 1 end
+    while n > max do
+        oldest, oldestKey = nil, nil
+        for k, e in pairs(t) do
+            if not oldest or (e.t or 0) < oldest then oldest, oldestKey = e.t or 0, k end
+        end
+        t[oldestKey] = nil
+        n = n - 1
     end
-    return n
 end
 
-local ScheduleShare, SaveOwn -- below
-
+---------------------------------------------------------------------------
+-- Scan the requests -> history entries + Helped ledger
+---------------------------------------------------------------------------
 local function Scan()
     scanPending = false
-    if not ns:GuildKey() then return end
-    local entries = Data().entries
-    local before = MyHelped()
-    local changed = false
+    local entries, ledger = Entries(), Ledger()
+    if not entries or not ledger then return end
+    local now = W.Now()
+    local histChanged, ledgerChanged = false, false
     for _, req in ipairs(W:All()) do
         if req.receivedFrom then
             local mine = W:IsMine(req)
             for who, n in pairs(req.receivedFrom) do
+                -- Helped ledger: the requester confirmed `who` delivered.
+                if who ~= req.requester then
+                    local lk = req.requester .. "|" .. req.id .. "|" .. who
+                    if not ledger[lk] then
+                        local t = math.min(req.updated or now, now)
+                        ledger[lk] = { r = req.requester, h = who, n = n, day = math.floor(t / 86400), t = t }
+                        ledgerChanged = true
+                    end
+                end
+                -- My own history
                 local key, kind, other
                 if mine then
                     key, kind, other = "R:" .. req.id .. ":" .. who, "received", who
@@ -88,19 +123,20 @@ local function Scan()
                     end
                     if n > e.qty then
                         e.qty, e.t = n, req.updated or time()
-                        changed = true
+                        histChanged = true
                     end
                 end
             end
         end
     end
-    if changed then
+    if histChanged then
+        Trim(entries, MAX_ENTRIES)
         ns:Fire("HISTORY_CHANGED")
-        if MyHelped() ~= before then
-            SaveOwn()
-            ns:Fire("HELPED_CHANGED")
-            ScheduleShare(SHARE_CHANGED)
-        end
+    end
+    if ledgerChanged then
+        Trim(ledger, MAX_LEDGER)
+        helpedCache = nil
+        ns:Fire("HELPED_CHANGED")
     end
 end
 
@@ -111,71 +147,64 @@ local function ScheduleScan()
 end
 
 ns:RegisterCallback("WISHLIST_CHANGED", ScheduleScan)
+ns:RegisterCallback("GUILD_CHANGED", function() helpedCache = nil ScheduleScan() end)
 ns:RegisterEvent("PLAYER_LOGIN", function() C_Timer.After(5, ScheduleScan) end)
+
+-- For /tavern securitytest: scan right away instead of after SCAN_DELAY.
+function History:ScanNow() Scan() helpedCache = nil end
 
 function History:Entries(kind)
     local out = {}
-    for _, e in pairs(Data().entries) do
+    for _, e in pairs(Entries() or {}) do
         if e.kind == kind then out[#out + 1] = e end
     end
     table.sort(out, function(a, b) return (a.t or 0) > (b.t or 0) end)
     return out
 end
 
----------------------------------------------------------------------------
--- Sharing the Helped count
----------------------------------------------------------------------------
-local function GuildStore()
-    local key = ns:GuildKey()
-    if not key then return nil end
-    ns.db.helped = ns.db.helped or {}
-    ns.db.helped[key] = ns.db.helped[key] or {}
-    return ns.db.helped[key]
-end
-
--- Keep my count in the account-wide store too, for my other characters on this account.
-SaveOwn = function()
-    local store = GuildStore()
-    if store then store[Short(ns:PlayerName())] = { n = MyHelped(), t = time() } end
-end
-
-local function ShareNow()
-    sharePending = false
-    SaveOwn()
-    if IsInGuild() and ns.Comm then ns.Comm:Send("WH", MyHelped()) end
-end
-
-ScheduleShare = function(delay)
-    if sharePending then return end
-    sharePending = true
-    C_Timer.After(delay, ShareNow)
-end
-
-ns.Comm:RegisterHandler("WH", function(sender, helped)
-    local store = GuildStore()
-    helped = tonumber(helped)
-    if not store or not helped then return end
-    store[sender] = { n = helped, t = time() }
-    ns:Fire("HELPED_CHANGED")
-end)
-
-ns:RegisterCallback("SYNC_REQUESTED", function() ScheduleShare(3 + math.random() * 5) end)
-ns:RegisterCallback("ADDON_USERS_CHANGED", function() ScheduleShare(3 + math.random() * 5) end)
-ns:RegisterCallback("HELLO", function(_, _, flag)
-    if flag == "Q" then ScheduleShare(2 + math.random() * 6) end
-end)
-ns:RegisterEvent("PLAYER_LOGIN", function()
-    C_Timer.After(SHARE_LOGIN, function() ScheduleShare(0) end)
-end)
-ns:RegisterEvent("PLAYER_LOGOUT", function() SaveOwn() end)
-
+-- Helped count for a guild member (nil = none known).
 function History:HelpedCount(fullName)
+    if not helpedCache then
+        helpedCache = {}
+        local perPairDay = {}
+        for _, e in pairs(Ledger() or {}) do
+            local pd = e.r .. "|" .. e.h .. "|" .. e.day
+            perPairDay[pd] = (perPairDay[pd] or 0) + 1
+            if perPairDay[pd] <= DAILY_CAP then helpedCache[e.h] = (helpedCache[e.h] or 0) + 1 end
+        end
+    end
     local name = Short(fullName)
-    if IsMe(name) then return MyHelped() end
-    local store = GuildStore()
-    local s = store and store[name]
-    return s and s.n or nil
+    if IsMe(name) then return helpedCache[ns:PlayerName()] or helpedCache[name] or 0 end
+    return helpedCache[name]
 end
+
+-- Saved data: drop anything malformed.
+ns:RegisterCallback("VALIDATE_DB", function()
+    for key, ledger in pairs(ns.db.helpedLedger) do
+        if type(ledger) ~= "table" then
+            ns.db.helpedLedger[key] = nil
+        else
+            for k, e in pairs(ledger) do
+                if type(e) ~= "table" or not ns:ValidName(e.r) or not ns:ValidName(e.h) or e.r == e.h
+                    or not ns:Int(e.n, 1) or not ns:Int(e.day, 0) then
+                    ledger[k] = nil
+                end
+            end
+        end
+    end
+    local h = ns.charDB.history
+    for _, list in pairs(type(h.byGuild) == "table" and h.byGuild or {}) do
+        if type(list) == "table" then
+            for k, e in pairs(list) do
+                if type(e) ~= "table" or not ns:ValidName(e.who) or (e.kind ~= "sent" and e.kind ~= "received") then
+                    list[k] = nil
+                elseif e.rule then
+                    e.rule = ns:CleanText(e.rule, 80)
+                end
+            end
+        end
+    end
+end)
 
 ---------------------------------------------------------------------------
 -- Tab
@@ -354,7 +383,7 @@ local function Build(p)
         { label = "To", width = 110, get = function(e) return e.who or "?" end },
         { label = "When", width = 80, get = function(e) return When(e.t), GREY end },
     })
-    lists.all = MakeList(panel, "Completed guild requests (kept 30 days)", {
+    lists.all = MakeList(panel, "Completed guild requests", {
         { label = "Item", width = 170, flex = 2,
           icon = function(req) return EntryIcon(Describe(req)) end,
           get = function(req) return EntryName(Describe(req)) end },

@@ -9,6 +9,9 @@
 --   * Sell warning: if you sell an item a guildmate asked for, a red on-screen and chat
 --     message names it and points to the vendor's Buyback tab. (The sale itself is never
 --     stopped; we only notice it afterwards, from the buyback list.)
+--   * COD warning: a guildmate's mail whose items are all on your wishlist, but whose
+--     COD is more than quantity x your price, gets a red warning when the mailbox shows
+--     it. Blizzard's own COD confirmation is never touched; you still decide.
 --   * Minimap badge: how many guildmates' requests arrived since you last opened the
 --     Wishlist tab.
 --
@@ -270,6 +273,67 @@ ns:RegisterEvent("MERCHANT_CLOSED", function()
 end)
 ns:RegisterEvent("MAIL_CLOSED", HidePopup)
 ns:RegisterEvent("AUCTION_HOUSE_CLOSED", HidePopup)
+
+---------------------------------------------------------------------------
+-- COD warning (mailbox)
+---------------------------------------------------------------------------
+local MAX_ATTACH = ATTACHMENTS_MAX_RECEIVE or 16
+local codWarned = {} -- mails already warned about this session
+
+local function MoneyText(copper)
+    if GetMoneyString then return GetMoneyString(copper, true) end
+    return tostring(copper)
+end
+
+-- What my wishlist says this attachment is worth, or nil if it's not on my wishlist.
+local function MyPrice(itemID, link, count)
+    for _, req in ipairs(W:List("mine")) do
+        local fits
+        if req.rule then
+            fits = link and W:MatchesRule(req.rule, link) == true
+        else
+            fits = req.itemID == itemID
+        end
+        if fits then return count * (req.price or 0) end
+    end
+    return nil
+end
+
+local function CheckCOD()
+    if not Setting("vendorPopup") or not ns.Comm then return end
+    for i = 1, (GetInboxNumItems and GetInboxNumItems() or 0) do
+        local _, _, sender, _, _, cod, _, hasItem = GetInboxHeaderInfo(i)
+        sender = sender and Short(sender)
+        if cod and cod > 0 and hasItem and sender and ns.Comm:IsMember(sender) then
+            local expected, items, judged = 0, {}, true
+            for a = 1, MAX_ATTACH do
+                local _, itemID, _, count = GetInboxItem(i, a)
+                if itemID then
+                    local price = MyPrice(itemID, GetInboxItemLink and GetInboxItemLink(i, a), count or 1)
+                    if not price then judged = false break end -- not all on my wishlist: can't judge
+                    expected = expected + price
+                    items[#items + 1] = itemID .. "x" .. (count or 1)
+                end
+            end
+            local key = sender .. "|" .. cod .. "|" .. table.concat(items, ",")
+            if judged and #items > 0 and cod > expected and not codWarned[key] then
+                codWarned[key] = true
+                local text = ("COD warning: %s's mail asks %s, but your wishlist price for these items is %s.")
+                    :format(ns:CleanText(sender, 64), MoneyText(cod), W:PriceText(expected))
+                ns:Print("|cffff4040" .. text .. "|r")
+                UIErrorsFrame:AddMessage(text, 1, 0.25, 0.25)
+                if SOUNDKIT and SOUNDKIT.RAID_WARNING then PlaySound(SOUNDKIT.RAID_WARNING) end
+            end
+        end
+    end
+end
+
+local codPending = false
+ns:RegisterEvent("MAIL_INBOX_UPDATE", function()
+    if codPending then return end
+    codPending = true
+    C_Timer.After(0.5, function() codPending = false CheckCOD() end)
+end)
 
 ---------------------------------------------------------------------------
 -- Minimap badge: guildmates' requests created since I last looked at the Wishlist tab

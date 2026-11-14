@@ -21,11 +21,14 @@
 --
 -- Fires ns callback "WISHLIST_CHANGED" after any change.
 --
--- Data-safety rules (sync must keep these):
+-- Data-safety rules (sync must keep these; see "Security rules" in CLAUDE.md):
 --   * Every request has its own unique id, so two requests can never overwrite each other.
---   * The requester's copy is the authority for its own request: sync only replaces a
---     stored request with a copy that has a newer `updated`, and never lets another
---     player edit or delete someone else's request. (Claims will be stored separately.)
+--   * Only the owner sends their requests (no relaying): Merge() takes the server-set
+--     sender and accepts a request only when sender == requester. Same for claims:
+--     sender == claimer. Every field is validated; notes and names are cleaned.
+--   * Caps: MAX_OPEN_OWN open requests per player, MAX_STORED requests and MAX_CLAIMS
+--     claims per guild. Other players' requests expire after settings.requestExpiryDays
+--     without hearing from their owner (bucket.seen[owner]).
 --   * Removing is a tombstone (deleted = true), never a hard delete, so a stale copy
 --     arriving later can't bring a removed request back.
 --   * A request leaves the list only when the requester removes it, or when received
@@ -37,10 +40,12 @@ local _, ns = ...
 local Wishlist = {}
 ns.Wishlist = Wishlist
 
-Wishlist.MAX_QTY        = 9999
+Wishlist.MAX_QTY        = 1000
 Wishlist.MAX_PRICE      = 9999 * 10000 -- 9999 gold
 Wishlist.MAX_NOTE       = 60
 Wishlist.MAX_OPEN_OWN   = 25
+Wishlist.MAX_STORED     = 2000 -- requests per guild, all players, incl. removed ones
+Wishlist.MAX_CLAIMS     = 2000
 Wishlist.TOMBSTONE_DAYS = 30 -- removed requests are forgotten after this
 
 local function Now()
@@ -48,7 +53,7 @@ local function Now()
 end
 Wishlist.Now = Now
 
--- Per-guild bucket: { requests = {}, lastSync = serverTime of last complete catch-up }
+-- Per-guild bucket: { requests = {}, claims = {}, seen = { [owner] = serverTime last heard from } }
 local function Bucket()
     local key = ns:GuildKey()
     if not key then return nil end
@@ -95,7 +100,7 @@ local STAT_BY_KEY = {}
 for _, s in ipairs(Wishlist.STATS) do STAT_BY_KEY[s.key] = s end
 local SLOT_OK = {}
 for _, s in ipairs(Wishlist.SLOTS) do SLOT_OK[s] = true end
-Wishlist.MAX_LEVEL = 100
+Wishlist.MAX_LEVEL = 60
 Wishlist.MAX_STAT  = 999
 
 -- Localized names, straight from the game.
@@ -267,7 +272,7 @@ function Wishlist:Add(what, qty, price, note)
         if not itemID or not C_Item.GetItemInfoInstant(itemID) then return nil, "Pick an item first." end
     end
     qty, price = tonumber(qty), tonumber(price) or 0
-    note = strtrim(note or ""):gsub("|", "") -- "|" would break chat links and the sync format
+    note = ns:CleanText(note, self.MAX_NOTE) -- no escape codes; "|" would also break the sync format
     if not qty or qty < 1 or qty > self.MAX_QTY then return nil, "Quantity must be 1 to " .. self.MAX_QTY .. "." end
     if price < 0 or price > self.MAX_PRICE then return nil, "Price is too high." end
     if #note > self.MAX_NOTE then note = note:sub(1, self.MAX_NOTE) end
@@ -315,40 +320,87 @@ function Wishlist:All()
     return out
 end
 
--- Validates a request that arrived from another player and merges it.
--- Rules (see header): newer `updated` wins; on a tie a removal wins; nobody
--- else's copy may change one of MY requests that I already have.
--- Returns true if the store changed.
-function Wishlist:Merge(rec)
-    local store = Store()
-    if not store or type(rec) ~= "table" then return false end
-    if type(rec.id) ~= "string" or type(rec.requester) ~= "string" then return false end
-    if rec.id:sub(1, #rec.requester + 1) ~= rec.requester .. ":" then return false end
-    local rule = rec.rule and self:CleanRule(rec.rule)
-    if rec.rule then
-        if not rule then return false end
-    elseif not rec.itemID or not C_Item.GetItemInfoInstant(rec.itemID) then
-        return false
+-- A clean copy of a request (from a message or from saved data), or nil if anything
+-- is invalid. Text is cleaned, numbers range-checked, rules re-validated.
+local FUTURE_SLACK = 3600 -- clocks are the server's; allow an hour of skew
+function Wishlist:Clean(rec)
+    if type(rec) ~= "table" then return nil end
+    local requester = ns:ValidName(rec.requester)
+    if not requester or type(rec.id) ~= "string" then return nil end
+    local idCreated, rand = rec.id:match("^.+:(%d+):(%d+)$")
+    if not idCreated or rec.id ~= ("%s:%s:%s"):format(requester, idCreated, rand) then return nil end
+    local rule
+    if rec.rule ~= nil then
+        rule = self:CleanRule(rec.rule)
+        if not rule then return nil end
     end
-    if not rec.qty or rec.qty < 1 or rec.qty > self.MAX_QTY then return false end
-    if not rec.price or rec.price < 0 or rec.price > self.MAX_PRICE then return false end
-    if not rec.updated or not rec.created then return false end
+    local itemID = (not rule) and ns:Int(rec.itemID, 1, 10000000) or nil
+    if not rule and (not itemID or not C_Item.GetItemInfoInstant(itemID)) then return nil end
+    local qty = ns:Int(rec.qty, 1, self.MAX_QTY)
+    local price = ns:Int(rec.price, 0, self.MAX_PRICE)
+    local updated = ns:Int(rec.updated, 1, Now() + FUTURE_SLACK)
+    local created = ns:Int(rec.created, 1, Now() + FUTURE_SLACK)
+    if not qty or not price or not updated or not created or created ~= tonumber(idCreated) then
+        return nil
+    end
+    local from
+    if type(rec.receivedFrom) == "table" then
+        for who, n in pairs(rec.receivedFrom) do
+            n = ns:Int(n, 1, self.MAX_QTY)
+            if ns:ValidName(who) and who ~= requester and n then
+                from = from or {}
+                from[who] = n
+            end
+        end
+    end
+    return {
+        id = rec.id, requester = requester, class = ns:ValidClass(rec.class),
+        itemID = itemID, rule = rule, qty = qty, received = math.min(ns:Int(rec.received, 0) or 0, qty),
+        price = price, note = ns:CleanText(rec.note, self.MAX_NOTE), receivedFrom = from,
+        created = created, updated = updated, deleted = rec.deleted and true or nil,
+    }
+end
+
+local function CountAll(t)
+    local n = 0
+    for _ in pairs(t) do n = n + 1 end
+    return n
+end
+
+-- Note that we heard from a player (any accepted message): their requests stay fresh.
+function Wishlist:SeenOwner(name)
+    local b = Bucket()
+    if not b or not ns:ValidName(name) then return end
+    b.seen = b.seen or {}
+    b.seen[name] = Now()
+end
+
+-- A request that arrived in a message from `sender` (set by the server).
+-- Accepted only from its owner. Newer `updated` wins; on a tie a removal wins.
+-- Returns true if the store changed.
+function Wishlist:Merge(rec, sender)
+    local store = Store()
+    if not store or not sender then return false end
+    rec = self:Clean(rec)
+    if not rec or rec.requester ~= sender or self:IsMine(rec) then return false end
     if rec.deleted and rec.updated < Now() - self.TOMBSTONE_DAYS * 86400 then return false end
 
     local cur = store[rec.id]
     if cur then
-        if self:IsMine(cur) then return false end -- my own copy is the authority
         local newer = rec.updated > cur.updated or (rec.updated == cur.updated and rec.deleted and not cur.deleted)
         if not newer then return false end
+    else
+        if CountAll(store) >= self.MAX_STORED then return false end
+        if self:IsOpen(rec) then
+            local open = 0
+            for _, r in pairs(store) do
+                if r.requester == sender and self:IsOpen(r) then open = open + 1 end
+            end
+            if open >= self.MAX_OPEN_OWN then return false end
+        end
     end
-    store[rec.id] = {
-        id = rec.id, requester = rec.requester, class = rec.class,
-        itemID = (not rule) and rec.itemID or nil, rule = rule, qty = rec.qty, received = math.min(rec.received or 0, rec.qty),
-        price = rec.price, note = (rec.note or ""):sub(1, self.MAX_NOTE),
-        receivedFrom = type(rec.receivedFrom) == "table" and rec.receivedFrom or nil,
-        created = rec.created, updated = rec.updated, deleted = rec.deleted or nil,
-    }
-    Changed(store[rec.id], "remote")
+    store[rec.id] = rec
+    Changed(rec, "remote")
     return true
 end
 
@@ -380,7 +432,7 @@ function Wishlist:DecodeFrom(text)
     for name, n in text:gmatch("([^,:]+):(%d+)") do
         count = count + 1
         if count > MAX_FROM then break end
-        from[name] = math.min(tonumber(n), self.MAX_QTY)
+        if ns:ValidName(name) then from[name] = math.min(tonumber(n), self.MAX_QTY) end
     end
     return next(from) and from or nil
 end
@@ -555,43 +607,100 @@ function Wishlist:AllClaims()
     return out
 end
 
--- Validates a claim from another player and merges it. Same rules as requests:
--- newer wins, cancellation wins ties, nobody else can change MY claim.
-function Wishlist:MergeClaim(rec)
+-- A clean copy of a claim, or nil.
+function Wishlist:CleanClaim(rec)
+    if type(rec) ~= "table" or type(rec.reqId) ~= "string" then return nil end
+    local claimer = ns:ValidName(rec.claimer)
+    local owner, created, rand = rec.reqId:match("^(.+):(%d+):(%d+)$")
+    if not claimer or not ns:ValidName(owner) or owner == claimer then return nil end
+    local qty = ns:Int(rec.qty, 0, self.MAX_QTY)
+    local updated = ns:Int(rec.updated, 1, Now() + FUTURE_SLACK)
+    if not qty or not updated or not created or not rand then return nil end
+    return { reqId = rec.reqId, claimer = claimer, class = ns:ValidClass(rec.class), qty = qty,
+             updated = updated, deleted = (rec.deleted or qty == 0) and true or nil }
+end
+
+-- A claim that arrived from `sender`: accepted only from the claimer themselves.
+-- Newer wins, cancellation wins ties.
+function Wishlist:MergeClaim(rec, sender)
     local claims = Claims()
-    if not claims or type(rec) ~= "table" then return false end
-    if type(rec.reqId) ~= "string" or type(rec.claimer) ~= "string" or rec.claimer == "" then return false end
-    if not rec.qty or rec.qty < 0 or rec.qty > self.MAX_QTY or not rec.updated then return false end
+    if not claims or not sender then return false end
+    rec = self:CleanClaim(rec)
+    if not rec or rec.claimer ~= sender or rec.claimer == ns:PlayerName() then return false end
     if rec.updated < Now() - self.TOMBSTONE_DAYS * 86400 then return false end
     local id = rec.reqId .. "#" .. rec.claimer
     local cur = claims[id]
     if cur then
-        if cur.claimer == ns:PlayerName() then return false end -- my claim is mine
         local newer = rec.updated > cur.updated or (rec.updated == cur.updated and rec.deleted and not cur.deleted)
         if not newer then return false end
+    elseif CountAll(claims) >= self.MAX_CLAIMS then
+        return false
     end
-    claims[id] = {
-        reqId = rec.reqId, claimer = rec.claimer, class = rec.class, qty = rec.qty,
-        updated = rec.updated, deleted = rec.deleted or nil,
-    }
-    ClaimChanged(claims[id], "remote")
+    claims[id] = rec
+    ClaimChanged(rec, "remote")
     return true
 end
 
--- Forget removed requests and old claims after TOMBSTONE_DAYS.
+-- Forget removed requests and old claims after TOMBSTONE_DAYS, and other players'
+-- requests and claims when we haven't heard from them for requestExpiryDays.
+function Wishlist:ExpiryDays()
+    return ns:Int(ns.db.settings.requestExpiryDays, 1, 365) or 14
+end
+
 function Wishlist:Purge()
-    local store = Store()
+    local b = Bucket()
+    local store = b and b.requests
     if not store then return end
-    local cutoff = Now() - self.TOMBSTONE_DAYS * 86400
+    local now = Now()
+    local cutoff = now - self.TOMBSTONE_DAYS * 86400
+    local stale = now - self:ExpiryDays() * 86400
+    b.seen = b.seen or {}
+    b.seen[ns:PlayerName()] = now
+    local function Gone(name)
+        -- Requests stored before v0.4.0 have no "seen" yet: start their clock now.
+        if not b.seen[name] then b.seen[name] = now end
+        return b.seen[name] < stale
+    end
+    local changed = false
     for id, req in pairs(store) do
-        -- removed or fulfilled, and untouched for TOMBSTONE_DAYS
-        if not self:IsOpen(req) and (req.updated or 0) < cutoff then store[id] = nil end
+        -- removed or fulfilled and untouched for TOMBSTONE_DAYS, or the owner is gone
+        if (not self:IsOpen(req) and (req.updated or 0) < cutoff) or (not self:IsMine(req) and Gone(req.requester)) then
+            store[id] = nil
+            changed = true
+        end
     end
     local claims = Claims()
     for id, c in pairs(claims) do
-        if (c.updated or 0) < cutoff then claims[id] = nil end
+        if (c.updated or 0) < cutoff or (c.claimer ~= ns:PlayerName() and Gone(c.claimer)) then claims[id] = nil end
     end
+    for name, t in pairs(b.seen) do
+        if t < stale - 30 * 86400 then b.seen[name] = nil end
+    end
+    if changed then Changed(nil, "remote") end
 end
+
+-- Saved data is checked like a message: anything invalid is dropped, notes cleaned.
+ns:RegisterCallback("VALIDATE_DB", function()
+    for key, b in pairs(ns.db.wishlist) do
+        if type(key) ~= "string" or type(b) ~= "table" then
+            ns.db.wishlist[key] = nil
+        else
+            local requests = type(b.requests) == "table" and b.requests or {}
+            b.requests = {}
+            for id, req in pairs(requests) do
+                local clean = Wishlist:Clean(req)
+                if clean and clean.id == id then b.requests[id] = clean end
+            end
+            local claims = type(b.claims) == "table" and b.claims or {}
+            b.claims = {}
+            for id, c in pairs(claims) do
+                local clean = Wishlist:CleanClaim(c)
+                if clean and id == clean.reqId .. "#" .. clean.claimer then b.claims[id] = clean end
+            end
+            if type(b.seen) ~= "table" then b.seen = nil end
+        end
+    end
+end)
 
 function Wishlist:Get(id)
     local store = Store()

@@ -24,7 +24,7 @@ A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but
 - Refreshes on GUILD_ROSTER_UPDATE, throttled. No polling. No right-click menu and no Blizzard actions.
 
 ## 2. PvP stats (feeds the roster)
-- Each player's addon tracks their own PvP stats and shares them over guild addon messages (`1|P|...`, throttled: ~15 s after login, at most once a minute after changes, soon after Sync or a new addon user). Event-driven only; no combat log.
+- Each player's addon tracks their own PvP stats and shares them over guild addon messages (`2|P|...`, throttled: ~15 s after login, at most once a minute after changes, soon after Sync or a new addon user), only when PvP sharing is on. **Self-reported:** accepted only about the sender, every number a whole number 0–10,000,000, the killer name cleaned; shown as "self-reported". Event-driven only; no combat log.
 - **Kills** = honorable kills, lifetime (includes assists): the higher of GetPVPLifetimeStats and statistic 588, read on PLAYER_PVP_KILLS_CHANGED.
 - **Killing blows on players** (since install): PARTY_KILL by me or my pet on a player GUID.
 - **Dishonorable kills** (since install): a killing blow on a player with no honor signal (PLAYER_PVP_KILLS_CHANGED / CHAT_MSG_COMBAT_HONOR_GAIN) within 1.5 s, i.e. the victim was too low level to give honor. Assists without honor can't be seen. Own roster column, not part of K/D.
@@ -42,13 +42,15 @@ A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but
 - **List:** item (quality-colored), progress (8 / 20), requester (class-colored), payment, note, claims. Filters: All / Mats / Gear / Mine, plus "Hide mine".
 - **Claim:** "I'm sending N" marks it so others don't double-send. Claims lapse after 72 hours.
 - **Auto-complete:** items the requester takes from the mailbox count toward the request; "Got" corrects counts by hand; done requests are removed.
-- Requests sync across the guild; online members pass them along so requests spread while the requester is offline.
+- Requests and claims sync across the guild, **owner-only** (no relaying): each player sends only their own requests and claims, live and when they or a guildmate log in/press Sync. You see a request once its owner has been online at the same time as you. Other players' requests expire after 14 days without hearing from them (Settings: 7/14/30/60).
+- Limits: quantity 1–1000, price 0–9999 gold, required level 1–60, note 60 characters (escape codes stripped), 25 open requests per player.
 
 ## 3b. History tab
 - Your own deliveries, only visible to you, worked out from the requests' "received from" (filled only when the requester takes items from the mailbox): **Items received** = senders on your requests; **Items sent** = other players' requests that list you. Marking your own request received by hand never counts. Copied per character so they outlive purged requests.
-- **Helped** = how many guildmates' requests you delivered to; shared as `1|WH|<n>` and shown on the roster.
-- Shared stats (PvP `P`, Helped `WH`) are sent at login, after changes, and in answer to any guildmate's login/Sync hello, so whoever logs in later still gets everyone's numbers. Your own numbers are also saved in the account-wide store, so your other characters on the same account (never online together) see them.
-- Checkbox **Show all completed guild requests** (off by default, not saved): every fulfilled request this client knows (kept 30 days), with who sent what.
+- **Helped** = how many guildmates' requests you delivered to, counted only from the **receiver's confirmation**: the "received from" that the requester's own client books when taking the items from the mailbox, sent only by the requester. Never from the helper's claim, never yourself, at most 3 per receiver-helper pair per day. Each client keeps a ledger of confirmations it has seen (account-wide, per guild), so players who install later see the last 14 days plus everything after.
+- PvP stats are sent at login, after changes, and in answer to any guildmate's login/Sync hello. Your own numbers are also saved in the account-wide store, so your other characters on the same account see them; that is local only and never sent.
+- Checkbox **Show all completed guild requests** (off by default, not saved): every fulfilled request this client knows, with who sent what. (Phase B replaces it with a Guild log.)
+- History is kept per guild (max 500 entries per character).
 
 ## 4. Alerts
 - **Item tooltips:** extra lines on wanted items (item and rule requests) — "Wanted by <name>: N more · price"; your own requests show as "On your wishlist: N more". Up to 4 lines, then "+N more".
@@ -69,7 +71,17 @@ A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but
 - Only players with the addon post their own level-ups.
 
 ## 7. Settings tab
-- Toggles: level-up posts, tooltip lines, vendor/AH/mail popup, minimap badge, minimap button.
+- Left: level-up posts, tooltip lines, vendor/AH/mail popup (+ sell and COD warnings), minimap badge, minimap button.
+- Right: sharing with this guild (see 8).
+
+## 8. Security & sharing
+Full rules: "Security rules (always apply)" in CLAUDE.md. In short:
+- **Opt-in per guild:** first login in a guild asks "Enable Unc's Tavern sharing for <guild>?". Until Enable, nothing is sent or accepted (the roster still works). Settings: master switch, Wishlist / PvP stats / Helped-History switches with what each shares, request expiry, **Delete this guild's data**.
+- **Trust:** the sender name (set by the server) is trusted; message content never is. Messages are accepted only on the GUILD channel, protocol 2, from members on our own cached roster (unknown sender: one roster refresh, then dropped), within a per-sender rate limit (burst 60, then 1/s). Every field is validated; text is stripped of escape codes; item names and links are always built locally from the item ID.
+- **Ownership:** requests only from their requester, claims only from their claimer, PvP stats only about the sender, Helped only from the receiver's confirmation. No relaying.
+- **Money and items:** the addon never sends mail, takes mail, pays COD, trades or sells. A guildmate's mail whose COD is above quantity x your wishlist price gets a red warning; Blizzard's COD confirmation is untouched.
+- Saved data is validated on load. Data is stored per guild (name + realm); leaving or changing guild hides the old data and stops syncing.
+- `/tavern securitytest` (after `/tavern debug on`): feeds forged messages to the receive path in a sandbox, sends nothing, prints PASS/FAIL.
 
 ## Out of scope
 - Gear upgrade detection (dropped).

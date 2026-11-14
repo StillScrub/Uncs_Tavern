@@ -26,22 +26,29 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 - Click a column header to sort, search by name, and toggle "Show offline" (remembered per character).
 - Hover a member to see their level, class, rank and public note.
 - Footer: "X of Y online · Z using Unc's Tavern".
-- **PvP stats** for members running the addon: Kills (lifetime honorable kills), Deaths (deaths to players), K/D, and Dishonorable kills (players too low level to give honor; not part of K/D). Hover a member for killing blows, dishonorable deaths and who has killed them most.
-- **Helped:** how many times each member has delivered wishlist items to a guildmate.
+- **PvP stats** (self-reported) for members running the addon: Kills (lifetime honorable kills), Deaths (deaths to players), K/D, and Dishonorable kills (players too low level to give honor; not part of K/D). Hover a member for killing blows, dishonorable deaths and who has killed them most.
+- **Helped:** how many times each member has delivered wishlist items to a guildmate, as confirmed by the person who received them.
 - **Sync** button to ask everyone running the addon to check in again.
 
 **Wishlist tab**
 - Request items: drag an item from your bags into the slot or **search by name**, set quantity, an optional note, and payment (**Gift** or **Pay up to** a price per item).
 - **Rule requests:** ask for any gear that fits, e.g. "Cloth, any slot, required level 26+, 4+ Intellect", optionally with a second stat.
 
-**History tab**
-- Your own **Items received** and **Items sent** through the wishlist (only you see it).
-- Tick **Show all completed guild requests** to see every finished request and who filled it.
 - List shows item (quality-colored), progress (`8 / 20`), requester (class-colored), payment, note, and claims.
 - Filters: **All / Mats / Gear / Mine**, plus **Hide mine**.
 - **Claims** ("I'm sending N") so guildmates don't double-send. Claims last 72 hours.
 - **Auto-complete:** items you take from the mailbox count toward your requests automatically; the **Got** button fixes counts for trades or gathered items. Finished requests disappear for everyone.
-- Requests and claims **sync across the guild**, live and on login; online members pass them along while you're offline.
+- Requests and claims **sync across the guild**, live and on login. Only the owner ever sends their own requests and claims (nothing is passed along by others), so you see a request once its owner has been online at the same time as you.
+
+**History tab**
+- Your own **Items received** and **Items sent** through the wishlist (only you see it).
+- Tick **Show all completed guild requests** to see every finished request and who filled it.
+
+**Alerts**
+- Item tooltips show who in the guild wants an item ("Wanted by <name>: N more · price").
+- A popup at vendors, the auction house and the mailbox lists bag items that fill guildmates' requests; selling one warns you and points to the Buyback tab.
+- A red warning when a guildmate's mail asks more COD than your wishlist price for those items.
+- A badge on the minimap button counts new requests until you open the Wishlist tab.
 
 **Level-up post**
 - On level-up, a popup offers to post `[Unc's Tavern] <Name> reached level <N>!` to guild chat with one click. (WoW: Forever only lets addons post to chat when you click.)
@@ -49,7 +56,7 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 
 **Minimap button & Settings**
 - Minimap button: left-click opens or closes Unc's Tavern (swapping with the guild window if it's open), right-click opens its Settings; drag to move.
-- Settings tab with toggles for level-up posts and the minimap button.
+- Settings tab: level-up posts, alerts and the minimap button on the left; what you share with your guild on the right.
 
 ## Screenshots
 
@@ -82,15 +89,27 @@ To update, delete the old `Uncs_Tavern` folder and extract the new zip the same 
 | `/tavern levelup` | Preview your level-up line (sends nothing) |
 | `/tavern levelup popup` | Show the level-up popup now |
 | `/tavern pvpdebug` | Print your PvP numbers, where they come from, and the last kill/death signal |
+| `/tavern debug on` / `off` | Developer options |
+| `/tavern securitytest` | Developer check: feeds forged messages to the addon in a sandbox and prints which were rejected (sends nothing; needs debug on) |
 
 The minimap button works like `/tavern` (right-click opens the Settings tab).
 
 ## Roadmap
 
 Coming soon:
-- **Bag tooltips:** "Wanted by &lt;name&gt;: N more · price" on wanted items.
-- **Vendor / auction house / mailbox popup:** "N items in your bags are on the guild wishlist".
-- **Mailbox "Guild Requests" tab:** pick a request and get a ready-to-send mail draft (recipient, items, COD).
+- **Rank permissions and a guild log:** the guild leader picks which ranks can moderate requests and see the officer log.
+- **Mailbox "Guild Requests" panel:** pick a request and get a ready-to-send mail draft (recipient, items, COD). You press Send.
+
+## Privacy & Safety
+
+- **Opt-in:** the first time you log in with a guild, the addon asks whether to share with that guild. Until you click Enable it sends nothing and accepts nothing. You can switch sharing, or each part of it, off any time in Settings.
+- **What is shared** (only with members of your current guild who run the addon): your wishlist requests and claims and what you've received; your PvP numbers; who delivered items to you.
+- **Never shared:** your bags, gold, mail, other guilds' data, or which characters belong to you.
+- **Stays in the guild:** data is stored per guild. Leaving or changing guild stops syncing and hides the old data; **Delete this guild's data** in Settings removes it.
+- **Can't be faked by a modified copy:** only you can create, change or remove your requests and claims; PvP numbers are accepted only about the sender (and labelled self-reported); Helped counts only when the receiver's own addon confirms it. Received text is stripped of links, colors and textures, and item names are always built by your own game client.
+- **Your money and items:** the addon never sends or takes mail, pays COD, trades or sells anything. It can fill things in; you always press the game's own button. It warns you when a guildmate's COD is above your wishlist price.
+
+Found a security problem? Please report it privately; see [SECURITY.md](SECURITY.md).
 
 ## Reporting bugs
 

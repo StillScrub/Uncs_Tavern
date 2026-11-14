@@ -24,7 +24,7 @@ local COLUMNS = {
     { key = "zone",   label = "Zone / Status", width = 115, flex = 3 },
     { key = "rank",   label = "Rank",          width = 85,  flex = 2 },
     { key = "kills",  label = "Kills",         width = 52,  justify = "CENTER",
-      tip = "Honorable kills, lifetime (includes assists)." },
+      tip = "Honorable kills, lifetime (includes assists). PvP numbers are self-reported by each player's addon." },
     { key = "deaths", label = "Deaths",        width = 52,  justify = "CENTER",
       tip = "Deaths to players. Lifetime when the game tracks it; otherwise deaths tracked since installing Unc's Tavern." },
     { key = "kd",     label = "K/D",           width = 48,  justify = "CENTER",
@@ -32,7 +32,7 @@ local COLUMNS = {
     { key = "dk",     label = "Dishonorable",  width = 78,  justify = "CENTER",
       tip = "Killing blows on players too low level to give honor, since installing Unc's Tavern. Not part of K/D." },
     { key = "helped", label = "Helped",        width = 52,  justify = "CENTER",
-      tip = "Times they delivered wishlist items to a guildmate (counted when the requester takes them from the mailbox)." },
+      tip = "Wishlist requests they delivered, as confirmed by the requester's own client when taking the items from the mailbox (at most 3 per guildmate per day)." },
 }
 -- Zone and Rank grow with the window; the rest stay sized to their content.
 ns.Columns.Layout(COLUMNS, 0)
@@ -425,6 +425,8 @@ local function Build(p)
             RequestRoster()
             self:Disable()
             C_Timer.After(ns.Comm.SYNC_COOLDOWN, function() self:Enable() end)
+        elseif left == "off" then
+            ns:Print("Sharing with this guild is off. Turn it on in Settings.")
         elseif left and left > 0 then
             ns:Print(("Sync is on cooldown (%ds)."):format(left))
         else

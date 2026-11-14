@@ -19,7 +19,9 @@ Modules\WishlistSync.lua
 Modules\AutoComplete.lua
 Modules\History.lua
 Modules\Settings.lua
+Modules\Sharing.lua
 Modules\LevelUp.lua
 Modules\MinimapButton.lua
 Modules\Alerts.lua
 Modules\PvPStats.lua
+Modules\SecurityTest.lua
