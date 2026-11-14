@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-14
+
 ### Added
 - **Wishlist item search:** type an item name (or ID) and pick it from the list: common mats and leveling items, items seen in your bags, and items already on the wishlist.
 - **Rule requests:** ask for any gear that fits (armor type, slot, minimum required level, one stat with a minimum, optionally a second stat). Always for one item. They sync to the guild, can be claimed, and items from the mailbox that fit count toward them.
@@ -63,6 +65,7 @@ First release.
 - Wishlist uses drag only: shift-click opened the bag's split-stack box, which grabbed keyboard input.
 - Level-up posts now go through: WoW: Forever blocks addon chat that isn't triggered by a click.
 
-[Unreleased]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/StillScrub/Uncs_Tavern/releases/tag/v0.1.0
