@@ -62,6 +62,7 @@ A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but
 - New tab next to Inbox / Send Mail.
 - Lists only requests the player can fill from their bags.
 - Picking one shows a draft: recipient, subject ("Unc's Tavern: Item ×N"), items attached, COD pre-filled as quantity × requester's price (or Gift). Everything is editable. (COD mail currently fails on the Forever server, "Internal mail database error" even without addons; until that's fixed the panel should not pre-fill COD.)
+- While COD is broken, the Wishlist form's **Pay up to** option is greyed out with the note "Disabled: COD mail is broken on the server right now." New requests are Gift only (`PAY_DISABLED` in Wishlist.lua).
 - "Fill Send Mail" fills the real Send Mail form. The player presses Send.
 
 ## 6. Level-up post
@@ -71,7 +72,7 @@ A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but
 - Only players with the addon post their own level-ups.
 
 ## 7. Settings tab
-- Left: level-up posts, tooltip lines, vendor/AH/mail popup, sell warning, COD warning (greyed out with a hover note while COD is broken on the server), minimap badge, minimap button. Buttons in a column share one width. The tab scrolls when the window is small.
+- Left: level-up posts, tooltip lines, vendor/AH/mail popup, sell warning, COD warning, minimap badge, minimap button. Buttons in a column share one width. The tab scrolls when the window is small.
 - Requests and claims of players no longer in the guild (left or kicked) are hidden everywhere (lists, tooltips, popup) as soon as the roster shows it; they come back if the player rejoins.
 - Our dialogs (claim, got, delete, level-up) are our own frames, never Blizzard's shared StaticPopup, so the game's own popups (guild invite, send money) are untouched.
 - Right: sharing with this guild (see 8).
@@ -81,7 +82,7 @@ Full rules: "Security rules (always apply)" in CLAUDE.md. In short:
 - **Opt-in per guild:** first login in a guild asks "Enable Unc's Tavern sharing for <guild>?". Until Enable, nothing is sent or accepted (the roster still works). Settings: master switch, Wishlist / PvP stats / Helped-History switches with what each shares, request expiry, **Delete this guild's data**.
 - **Trust:** the sender name (set by the server) is trusted; message content never is. Messages are accepted only on the GUILD channel, protocol 2, from members on our own cached roster (unknown sender: one roster refresh, then dropped), within a per-sender rate limit (burst 60, then 1/s). Every field is validated; text is stripped of escape codes; item names and links are always built locally from the item ID.
 - **Ownership:** requests only from their requester, claims only from their claimer, PvP stats only about the sender, Helped only from the receiver's confirmation. No relaying.
-- **Money and items:** the addon never sends mail, takes mail, pays COD, trades or sells. A guildmate's mail whose COD is above quantity x your wishlist price gets a red warning (disabled while COD is broken on the Forever server); Blizzard's COD confirmation is untouched.
+- **Money and items:** the addon never sends mail, takes mail, pays COD, trades or sells. A guildmate's mail whose COD is above quantity x your wishlist price gets a red warning; Blizzard's COD confirmation is untouched.
 - Saved data is validated on load. Data is stored per guild (name + realm); leaving or changing guild hides the old data and stops syncing.
 - `/tavern securitytest` (after `/tavern debug on`): feeds forged messages to the receive path in a sandbox, sends nothing, prints PASS/FAIL.
 

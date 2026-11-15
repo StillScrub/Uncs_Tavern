@@ -10,7 +10,7 @@
 --   * Sell warning: if you sell an item a guildmate asked for, a red on-screen and chat
 --     message names it and points to the vendor's Buyback tab. (The sale itself is never
 --     stopped; we only notice it afterwards, from the buyback list.)
---   * COD warning (disabled for now, see COD_BROKEN): a guildmate's mail whose items are all on your wishlist, but whose
+--   * COD warning: a guildmate's mail whose items are all on your wishlist, but whose
 --     COD is more than quantity x your price, gets a red warning when the mailbox shows
 --     it. Blizzard's own COD confirmation is never touched; you still decide.
 --   * Minimap badge: how many guildmates' requests arrived since you last opened the
@@ -287,12 +287,6 @@ ns:RegisterEvent("AUCTION_HOUSE_CLOSED", HidePopup)
 ---------------------------------------------------------------------------
 -- COD warning (mailbox)
 ---------------------------------------------------------------------------
--- Disabled for now: COD mail fails on the WoW: Forever server ("Internal mail database
--- error", confirmed 2026-11-15 with all addons off). The code stays; flip this to false
--- once COD works again and the Settings switch becomes usable.
-local COD_BROKEN = true
-local COD_NOTE = "Cash on Delivery mail is broken on WoW: Forever right now: the server answers 'Internal mail database error' even with no addons. This warning is disabled until it's fixed."
-
 local MAX_ATTACH = ATTACHMENTS_MAX_RECEIVE or 16
 local codWarned = {} -- mails already warned about this session
 
@@ -316,7 +310,7 @@ local function MyPrice(itemID, link, count)
 end
 
 local function CheckCOD()
-    if COD_BROKEN or not Setting("codWarning") or not ns.Comm then return end
+    if not Setting("codWarning") or not ns.Comm then return end
     for i = 1, (GetInboxNumItems and GetInboxNumItems() or 0) do
         local _, _, sender, _, _, cod, _, hasItem = GetInboxHeaderInfo(i)
         sender = sender and Short(sender)
@@ -459,17 +453,8 @@ ns.Settings:RegisterToggle({
 })
 ns.Settings:RegisterToggle({
     key = "codWarning",
-    -- shown unticked while disabled, without changing the saved choice
-    get = function() return not COD_BROKEN and Setting("codWarning") end,
-    set = function(v) ns.db.settings.codWarning = v end,
     label = "Warn me when a guildmate's COD is too high",
-    description = COD_BROKEN and "|cffff8040Disabled: COD mail is broken on the server right now (hover for details).|r"
-        or "A red warning if a guildmate's mail asks more COD than your wishlist price.",
-    tooltip = function()
-        return COD_BROKEN and COD_NOTE
-            or "A red warning if a guildmate's mail asks more COD than your wishlist price. Blizzard's own COD confirmation is never touched."
-    end,
-    disabled = function() return COD_BROKEN end,
+    description = "A red warning if a guildmate's mail asks more COD than your wishlist price.",
     order = 41.6,
 })
 ns.Settings:RegisterToggle({

@@ -11,6 +11,10 @@ local W = ns.Wishlist
 
 local ROW_HEIGHT = 22
 local FORM_HEIGHT = { item = 108, rule = 142 }
+-- "Pay up to" is greyed out: COD mail fails on the WoW: Forever server ("Internal mail
+-- database error", 2026-11-15, even with no addons), so paid requests can't be filled.
+-- Set to false when COD works again; nothing else needs changing.
+local PAY_DISABLED = true
 -- Item and Note grow with the window; the rest are sized to fit their content
 -- (Requester fits a full two-part name).
 local COLUMNS = {
@@ -476,10 +480,11 @@ local function Refresh()
 end
 
 local function SetPayMode(pay)
+    if PAY_DISABLED then pay = false end
     giftRadio:SetChecked(not pay)
     payRadio:SetChecked(pay)
     for _, box in ipairs({ goldBox, silverBox, copperBox }) do
-        box:SetAlpha(pay and 1 or 0.6)
+        box:SetAlpha(PAY_DISABLED and 0.35 or (pay and 1 or 0.6))
     end
 end
 
@@ -804,6 +809,18 @@ local function BuildQtyNoteAndPayment()
     local each = form:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     each:SetPoint("LEFT", c, "RIGHT", 4, 0)
     each:SetText("each")
+
+    if PAY_DISABLED then
+        payRadio:Disable()
+        payRadio.label:SetFontObject("GameFontDisableSmall")
+        each:SetFontObject("GameFontDisableSmall")
+        for _, box in ipairs({ goldBox, silverBox, copperBox }) do box:Disable() end
+        local note = form:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        note:SetPoint("TOPLEFT", payRadio, "BOTTOMLEFT", 4, -1)
+        note:SetWordWrap(false)
+        note:SetTextColor(1, 0.5, 0.25)
+        note:SetText("Disabled: COD mail is broken on the server right now.")
+    end
 
     local addButton = CreateFrame("Button", nil, form, "UIPanelButtonTemplate")
     addButton:SetSize(110, 22)

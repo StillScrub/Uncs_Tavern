@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Quantity is now 1-1000 per request (was 9999), required level for rules 1-60.
 - The wishlist popup at vendors, the auction house and the mailbox shows once per login, with **Show me** / **Ignore forever**. The sell warning has its own setting.
-- The COD warning has its own setting, greyed out for now: COD mail fails on the WoW: Forever server ("Internal mail database error", even with no addons). Hover it for the note.
+- The COD warning has its own setting.
+- **Pay up to** in the Wishlist form is greyed out for now, with a note: COD mail fails on the WoW: Forever server ("Internal mail database error", even with no addons). New requests are Gift until the server is fixed.
 - Settings tab scrolls when the window is small; its buttons line up at the same width.
 
 ### Fixed
