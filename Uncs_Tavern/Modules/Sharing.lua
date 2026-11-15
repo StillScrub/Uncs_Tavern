@@ -29,7 +29,7 @@ local popup
 
 local function CreatePopup()
     popup = CreateFrame("Frame", "UncsTavernSharingPopup", UIParent, "BasicFrameTemplateWithInset")
-    popup:SetSize(420, 220)
+    popup:SetSize(420, 250)
     popup:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
     popup:SetFrameStrata("DIALOG")
     popup:SetClampedToScreen(true)
@@ -56,7 +56,8 @@ local function CreatePopup()
     body:SetText("Shared only with this guild's members who run the addon:\n"
         .. "  - " .. WHAT.wishlist .. "\n"
         .. "  - " .. WHAT.pvp .. "\n"
-        .. "  - " .. WHAT.helped .. "\n\n"
+        .. "  - " .. WHAT.helped .. "\n"
+        .. "  - moderator actions (if your rank may moderate) and, for the guild leader, the rank permissions\n\n"
         .. "|cff999999Never shared: your bags, gold, mail, or which characters are yours. "
         .. "You can switch each part off in Settings.|r")
 
@@ -109,6 +110,10 @@ local function DeleteGuildData()
     ns.db.pvp[key] = nil
     ns.db.helpedLedger[key] = nil
     ns.db.roster[key] = nil
+    ns.db.perms[key] = nil      -- comes back from the guild leader while sharing is on
+    ns.db.modActions[key] = nil
+    ns.db.guildLog[key] = nil
+    ns.db.officerLog[key] = nil
     local h = ns.charDB.history
     if type(h.byGuild) == "table" then h.byGuild[key] = nil end
     ns:Fire("WISHLIST_CHANGED", nil, "remote")

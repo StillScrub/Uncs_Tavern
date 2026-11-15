@@ -21,6 +21,9 @@ Modules\AutoComplete.lua
 Modules\History.lua
 Modules\Settings.lua
 Modules\Sharing.lua
+Modules\Permissions.lua
+Modules\Moderation.lua
+Modules\GuildLog.lua
 Modules\LevelUp.lua
 Modules\MinimapButton.lua
 Modules\Alerts.lua

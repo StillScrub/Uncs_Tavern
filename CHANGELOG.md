@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - History is kept per guild; nothing from one guild is shown in another.
 - New message format (protocol 2): versions before 0.4.0 can't sync with this one, so everyone in the guild needs to update.
 - `/tavern securitytest` (developer check, after `/tavern debug on`).
+- **Rank permissions:** the guild leader picks which ranks may moderate requests and see the officer log (Settings > Guild > Permissions). Accepted only from the guild leader by your own roster; falls back to guild leader only if the guild's ranks change. Moderator actions and officer data are checked against your own roster too; officer data never goes on the guild channel.
 - SECURITY.md and a "Privacy & Safety" section in the README. The release workflow's checkout action is pinned to a commit.
 
 ### Changed
@@ -26,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pay up to** in the Wishlist form is greyed out for now, with a note: COD mail fails on the WoW: Forever server ("Internal mail database error", even with no addons). New requests are Gift until the server is fixed.
 - Settings tab redone like the game's Options window: a category list on the left (General, Alerts, Minimap, Sharing), the page on the right with a Defaults button, the game's checkboxes and dropdown, descriptions in hover tooltips.
 - New addon icon (window portrait, minimap button and the AddOns list).
+
+### Added
+- **Moderators** can remove any request and clear any claim (right-click a Wishlist row), with an optional reason for the officer log. Every action shows in the Guild log.
+- **Guild log** in the History tab (replaces "Show all completed guild requests"): deliveries marked Confirmed / Unconfirmed / Mismatch, and moderator actions. Last 200 entries, 30 days (guild leader adjustable).
+- **Officer log** for allowed ranks: moderator actions with reasons and every mismatch, sent only over the officer channel or by whisper to allowed members.
+- `/tavern probe` shows what your client supports for permissions and the officer log.
 
 ### Fixed
 - After using Claim or Got, the guild window's "Add member" box only accepted numbers, and other Blizzard popups could be blocked. The addon no longer uses Blizzard's shared popups at all; it has its own dialog.

@@ -368,6 +368,7 @@ function Wishlist:Clean(rec)
         itemID = itemID, rule = rule, qty = qty, received = math.min(ns:Int(rec.received, 0) or 0, qty),
         price = price, note = ns:CleanText(rec.note, self.MAX_NOTE), receivedFrom = from,
         created = created, updated = updated, deleted = rec.deleted and true or nil,
+        modBy = rec.deleted and ns:ValidName(rec.modBy) or nil, -- removed by a moderator (Moderation.lua)
     }
 end
 
@@ -626,8 +627,10 @@ function Wishlist:CleanClaim(rec)
     local qty = ns:Int(rec.qty, 0, self.MAX_QTY)
     local updated = ns:Int(rec.updated, 1, Now() + FUTURE_SLACK)
     if not qty or not updated or not created or not rand then return nil end
+    local deleted = (rec.deleted or qty == 0) and true or nil
     return { reqId = rec.reqId, claimer = claimer, class = ns:ValidClass(rec.class), qty = qty,
-             updated = updated, deleted = (rec.deleted or qty == 0) and true or nil }
+             updated = updated, deleted = deleted,
+             modBy = deleted and ns:ValidName(rec.modBy) or nil } -- cleared by a moderator
 end
 
 -- A claim that arrived from `sender`: accepted only from the claimer themselves.

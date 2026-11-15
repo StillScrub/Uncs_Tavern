@@ -11,6 +11,7 @@
 --       text = "Question?",            -- plain text (already formatted)
 --       accept = "OK", cancel = "Cancel",
 --       edit = { numeric = true, maxLetters = 4, default = 5 },  -- optional input box
+--                                      -- (width = n for a wider, left-aligned text box)
 --       timeout = 120,                 -- optional, seconds
 --       onAccept = function(text) end, -- text = the input box's text (or nil)
 --   })
@@ -92,6 +93,8 @@ function Dialog:Show(opts)
     if e then
         frame.edit:SetNumeric(e.numeric and true or false)
         frame.edit:SetMaxLetters(e.maxLetters or 0)
+        frame.edit:SetWidth(e.width or 80)
+        frame.edit:SetJustifyH(e.width and "LEFT" or "CENTER")
         frame.edit:SetText(e.default ~= nil and tostring(e.default) or "")
         frame.edit:ClearAllPoints()
         frame.edit:SetPoint("TOP", frame.text, "BOTTOM", 0, -12)

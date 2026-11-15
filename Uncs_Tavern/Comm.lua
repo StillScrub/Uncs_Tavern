@@ -18,12 +18,20 @@
 -- Anything else is dropped silently (counted in Comm.stats for /tavern sync).
 -- Handlers still validate every field themselves.
 --
+-- Officer data (handlers registered with category "officer") is the one exception to
+-- "GUILD only": it travels ONLY over OFFICER or as WHISPER to rank-checked members, and
+-- is dropped if it arrives on GUILD. Anything else arriving on OFFICER/WHISPER is
+-- dropped. Whispers pass the same roster check, so non-guildies are ignored.
+--
 -- Outgoing: a throttled queue (1 msg/s). Each queued message remembers the guild it
 -- was meant for and is dropped if the guild changes. Nothing is sent while sharing is
 -- off, or for a category that is switched off.
 --
 -- API for other modules:
 --   ns.Comm:Send(type, ...fields)                 queue a guild message (throttled)
+--   ns.Comm:SendOfficer(type, targets, ...fields) officer data: OFFICER channel, plus a
+--                                                 WHISPER to each roster name in targets
+--   ns.Comm:OnlineMembers() -> { {name, full, rankIndex} }   from our roster cache
 --   ns.Comm:RegisterHandler(type, fn, category)   fn(sender, ...fields); category = "wishlist" | "pvp" | nil (presence)
 --   ns.Comm:IsSharing(category)                   opted in (and that category on) for the current guild?
 --   ns.Comm:Sharing()                             this guild's sharing settings table (or nil)
@@ -107,6 +115,9 @@ end
 -- Roster cache (our own view of who is in the guild, and their rank)
 ---------------------------------------------------------------------------
 local members = {}     -- [short name] = rankIndex
+local fullNames = {}   -- [short name] = the name as the roster gives it (for whispers)
+local online = {}      -- [short name] = true while online
+local rankNames = {}   -- [rankIndex] = rank name, as seen on the roster
 local memberCount = 0
 local lastRosterAsk = -ROSTER_ASK_GAP
 local held = {}        -- messages from senders not (yet) on our roster
@@ -127,13 +138,19 @@ local function RebuildRoster()
     local before, beforeCount = {}, memberCount
     for name in pairs(members) do before[name] = true end
     wipe(members)
+    wipe(fullNames)
+    wipe(online)
+    wipe(rankNames)
     memberCount = 0
     if IsInGuild() then
         for i = 1, GetNumGuildMembers() or 0 do
-            local full, _, rankIndex = GetGuildRosterInfo(i)
+            local full, rankName, rankIndex, _, _, _, _, _, isOnline = GetGuildRosterInfo(i)
             local name = Normalize(full)
             if name then
                 members[name] = rankIndex
+                fullNames[name] = full
+                online[name] = isOnline and true or nil
+                if rankIndex and rankName then rankNames[rankIndex] = rankName end
                 memberCount = memberCount + 1
             end
         end
@@ -168,12 +185,29 @@ function Comm:RankIndex(name)
     return name and members[name]
 end
 
+-- Rank names seen on the roster: [rankIndex] = name (ranks nobody holds are missing).
+function Comm:RosterRankNames()
+    return rankNames
+end
+
+-- Online guild members other than me: { { name = short, full = roster name, rankIndex } }
+function Comm:OnlineMembers()
+    local out = {}
+    if test then return out end
+    for name in pairs(online) do
+        if not IsMe(name) then
+            out[#out + 1] = { name = name, full = fullNames[name] or name, rankIndex = members[name] }
+        end
+    end
+    return out
+end
+
 ---------------------------------------------------------------------------
 -- Sending (throttled queue, drained with one-shot timers only while non-empty)
 ---------------------------------------------------------------------------
-local function RawSend(text)
+local function RawSend(text, channel, target)
     if C_ChatInfo and C_ChatInfo.SendAddonMessage then
-        local ok, ret = pcall(C_ChatInfo.SendAddonMessage, PREFIX, text, "GUILD")
+        local ok, ret = pcall(C_ChatInfo.SendAddonMessage, PREFIX, text, channel or "GUILD", target)
         if not ok then return false, tostring(ret) end
         -- Newer clients return a result enum (0 = success), older ones a boolean.
         if ret == false or (type(ret) == "number" and ret ~= 0) then return false, "result " .. tostring(ret) end
@@ -195,7 +229,7 @@ Drain = function()
         table.remove(queue, 1)
         return Drain()
     end
-    local ok, err = RawSend(item.text)
+    local ok, err = RawSend(item.text, item.channel, item.target)
     if ok then
         table.remove(queue, 1)
     else
@@ -212,13 +246,7 @@ Drain = function()
     end
 end
 
-function Comm:Send(msgType, ...)
-    local category = handlers[msgType] and handlers[msgType].category
-    if test then
-        test.suppressed = test.suppressed + 1 -- the security test never sends anything
-        return
-    end
-    if not IsInGuild() or not self:IsSharing(category) then return end
+local function Build(msgType, ...)
     local parts = { PROTOCOL, msgType }
     for i = 1, select("#", ...) do
         -- "|" separates fields; nothing we send may contain one.
@@ -227,13 +255,51 @@ function Comm:Send(msgType, ...)
     local text = table.concat(parts, "|")
     if #text > MAX_MSG_LEN then
         ns:Print("Comm: message too long, not sent (" .. msgType .. ")")
-        return
+        return nil
     end
-    queue[#queue + 1] = { text = text, tries = 0, key = ns:GuildKey(), category = category }
+    return text
+end
+
+local function Enqueue(text, category, channel, target)
+    queue[#queue + 1] = { text = text, tries = 0, key = ns:GuildKey(), category = category,
+                          channel = channel, target = target }
     if not sending then
         sending = true
         Drain()
     end
+end
+
+-- The security test never sends anything; it only counts what would have gone out.
+local function Suppressed()
+    if test then test.suppressed = test.suppressed + 1 return true end
+    return false
+end
+
+function Comm:Send(msgType, ...)
+    local category = handlers[msgType] and handlers[msgType].category
+    if category == "officer" then return end -- officer data never goes on GUILD
+    if Suppressed() or not IsInGuild() or not self:IsSharing(category) then return end
+    local text = Build(msgType, ...)
+    if text then Enqueue(text, category, "GUILD") end
+end
+
+-- Officer data: over the OFFICER addon channel (reaches members who can read officer
+-- chat) and as a WHISPER to every roster name in `targets` (members our own roster says
+-- may see the officer log, which covers ranks without officer chat). Receivers drop
+-- duplicates.
+function Comm:SendOfficer(msgType, targets, ...)
+    if Suppressed() or not IsInGuild() or not self:IsSharing() then return end
+    local text = Build(msgType, ...)
+    if not text then return end
+    Enqueue(text, "officer", "OFFICER")
+    for _, full in ipairs(targets or {}) do Enqueue(text, "officer", "WHISPER", full) end
+end
+
+-- For /tavern probe: send one harmless message (an unknown type every client drops) on
+-- a channel and report what the game said.
+function Comm:ProbeSend(channel)
+    if not IsInGuild() then return false, "not in a guild" end
+    return RawSend(PROTOCOL .. "|PING", channel)
 end
 
 function Comm:QueueLength()
@@ -274,11 +340,14 @@ end
 
 -- Returns nothing; every rejection is counted in Comm.stats.dropped.
 local function Receive(text, channel, sender)
-    if channel ~= "GUILD" then Drop("channel") return end
+    if channel ~= "GUILD" and channel ~= "OFFICER" and channel ~= "WHISPER" then Drop("channel") return end
     if type(text) ~= "string" or #text > MAX_MSG_LEN then Drop("malformed") return end
     local fields = { strsplit("|", text) }
     if fields[1] ~= PROTOCOL then Drop("old protocol") return end
     if #fields > MAX_FIELDS or not handlers[fields[2]] then Drop("unknown type") return end
+    -- Officer data only off GUILD; everything else only on GUILD.
+    local officer = handlers[fields[2]].category == "officer"
+    if officer ~= (channel ~= "GUILD") then Drop("channel") return end
     local name = Normalize(sender)
     if not ns:ValidName(name) then Drop("bad sender") return end
     if IsMe(name) then return end

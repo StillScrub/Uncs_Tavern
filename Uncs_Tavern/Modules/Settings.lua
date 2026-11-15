@@ -17,6 +17,9 @@
 --   ns.Settings:RegisterHeader({ category, text = "..." | fn, order })  -- a section inside a page
 --   ns.Settings:RegisterButton({ category, label, buttonText, onClick = fn, order })
 --   ns.Settings:RegisterChoice({ category, key, label, choices = { 7, 14 }, format = fn(v), order })
+--     (or get() / set(v) instead of key; disabled() greys it out)
+--   ns.Settings:RegisterCustom({ category, order, height, build = fn(row) -> refreshFn })
+--     a row the module draws itself (ns.Settings.Checkbox(parent) gives the page's checkbox)
 -- Defaults resets the page's own ns.db.settings keys to Core's defaults.
 -- Texts and states refresh when the tab is shown and on ns:Fire("SETTINGS_REFRESH").
 local _, ns = ...
@@ -54,6 +57,7 @@ end
 function Settings:RegisterHeader(def) Add("header", def) end
 function Settings:RegisterButton(def) Add("button", def) end
 function Settings:RegisterChoice(def) Add("choice", def) end
+function Settings:RegisterCustom(def) Add("custom", def) end
 
 function Settings:Get(key)
     return ns.db and ns.db.settings[key]
@@ -169,6 +173,7 @@ local function Checkbox(parent)
     cb:SetDisabledCheckedTexture(Tex(HasAtlas("checkmark-minimal-disabled") and "checkmark-minimal-disabled" or "checkmark-minimal"))
     return cb
 end
+Settings.Checkbox = Checkbox
 
 local function ArrowButton(parent, dir)
     local b = CreateFrame("Button", nil, parent)
@@ -185,14 +190,16 @@ end
 -- when the client has it; otherwise the arrows step through the values.
 local function ChoiceControl(row, def)
     local function Index()
-        local cur = ns.db.settings[def.key]
+        local cur
+        if def.get then cur = def.get() else cur = ns.db.settings[def.key] end
         for i, v in ipairs(def.choices) do if v == cur then return i end end
         return 1
     end
     local function TextFor(v) return def.format and def.format(v) or tostring(v) end
     local function Set(i)
+        if def.disabled and def.disabled() then return end
         i = math.max(1, math.min(#def.choices, i))
-        ns.db.settings[def.key] = def.choices[i]
+        if def.set then def.set(def.choices[i]) else ns.db.settings[def.key] = def.choices[i] end
         if def.onChange then def.onChange(def.choices[i]) end
         if SOUNDKIT then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
         Refresh()
@@ -235,8 +242,10 @@ local function ChoiceControl(row, def)
         elseif middle.GenerateMenu then
             middle:GenerateMenu() -- updates the shown value
         end
-        prev:SetEnabled(i > 1)
-        nextButton:SetEnabled(i < #def.choices)
+        local off = def.disabled and def.disabled()
+        prev:SetEnabled(not off and i > 1)
+        nextButton:SetEnabled(not off and i < #def.choices)
+        if middle.SetEnabled then middle:SetEnabled(not off) end
     end
     return refresh, prev, middle, nextButton
 end
@@ -318,6 +327,11 @@ local function BuildPage(scroll, cat, onDefaults)
                 local refresh, a, b, c = ChoiceControl(row, def)
                 Hoverable(row, def, a, b, c)
                 widgets[#widgets + 1] = { refresh = refresh }
+
+            elseif def.kind == "custom" then
+                local row = Row(def.height or ROW_HEIGHT)
+                local refresh = def.build(row)
+                if refresh then widgets[#widgets + 1] = { refresh = refresh } end
 
             elseif def.kind == "button" then
                 local row = Row(ROW_HEIGHT)

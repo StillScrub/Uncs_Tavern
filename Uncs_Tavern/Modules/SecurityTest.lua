@@ -5,13 +5,14 @@
 --                         path and prints which were rejected.
 --
 -- Nothing is sent while it runs: Comm swallows every outgoing message (and counts
--- them), the guild roster is a fake one (Alice Test, Bob Test), and all data goes to a
+-- them), the guild roster is a fake one (Alice Test, Bob Test, Lea Der as guild leader), and all data goes to a
 -- throwaway guild key that is deleted afterwards. Your real guild's data isn't touched.
 local _, ns = ...
 local W, Comm = ns.Wishlist, ns.Comm
 
 local KEY = "SecurityTest@local"
 local ALICE, BOB, MALLORY = "Alice Test", "Bob Test", "Mallory Evil"
+local LEADER = "Lea Der" -- rank 0 in the fake roster
 local ITEM = 2589 -- Linen Cloth
 
 local function Msg(...)
@@ -33,6 +34,10 @@ local function Wipe()
     ns.db.helpedLedger[KEY] = nil
     ns.db.roster[KEY] = nil
     ns.db.sharing[KEY] = nil
+    ns.db.perms[KEY] = nil
+    ns.db.modActions[KEY] = nil
+    ns.db.guildLog[KEY] = nil
+    ns.db.officerLog[KEY] = nil
     local h = ns.charDB.history
     if type(h.byGuild) == "table" then h.byGuild[KEY] = nil end
 end
@@ -140,8 +145,49 @@ local function Run()
     local users = ns.db.roster[KEY] and ns.db.roster[KEY].users
     Expect("bad version string in hello rejected", not (users and users[BOB]))
 
-    -- Unknown types and floods
+    -- Phase B: rank config, moderation, officer log
+    local hash = ns.Perms:RankHash()
+    Send(BOB, Msg("K", now, 1023, 1023, 30, hash))
+    Expect("rank config from a non-leader rejected", ns.db.perms[KEY] == nil)
+    Send(BOB, Msg("K", now, 1023, 1023, 30, hash, "rank=0"))
+    Expect("rank claimed in message content ignored (config still rejected)", ns.db.perms[KEY] == nil)
+
+    Send(ALICE, R({ created = now, rand = 3001 }))
+    Send(ALICE, R({ created = now, rand = 3002 }))
+    local id1, id2 = ("%s:%d:%d"):format(ALICE, now, 3001), ("%s:%d:%d"):format(ALICE, now, 3002)
+    Send(BOB, Msg("C", ALICE, now, 3002, "WARRIOR", 2, now, 0))
+    Send(BOB, Msg("MD", ALICE, now, 3001, now))
+    Expect("request removal from a non-moderator rejected", not (W:Get(id1) or {}).deleted)
+    Send(BOB, Msg("MD", ALICE, now, 3001, now, 0))
+    Expect("moderator rank claimed in message content ignored", not (W:Get(id1) or {}).deleted)
+    Send(ALICE, Msg("MC", ALICE, now, 3002, BOB, now))
+    Expect("claim clear from a rank the leader didn't allow rejected", W:ClaimedTotal(id2) == 2)
+
+    -- Control: the guild leader allows rank 1 (Alice, and you in this test) to moderate.
+    Send(LEADER, Msg("K", now, 3, 3, 30, hash))
+    Expect("rank config from the guild leader accepted", ns.db.perms[KEY] and ns.db.perms[KEY].mod == 3)
+    Send(ALICE, Msg("MC", ALICE, now, 3002, BOB, now + 1))
+    Expect("claim clear from an allowed moderator rank accepted", W:ClaimedTotal(id2) == 0)
+    Send(LEADER, Msg("MD", ALICE, now, 3001, now + 1))
+    Expect("request removal by the guild leader accepted", (W:Get(id1) or {}).deleted == true)
+    Expect("moderator action shows in the Guild log", ns.GuildLog:Get("M:D:" .. id1) ~= nil)
+
     local before = Comm.stats.accepted
+    Send(BOB, Msg("L", ALICE, "Confirmed", 99))
+    Expect("log entry message about another player dropped (no such message exists)", Comm.stats.accepted == before)
+    local officerId = "O:D:" .. id1
+    Send(BOB, Msg("OM", "D", ALICE, now, 3001, "", now, "fake reason"), "WHISPER")
+    Expect("officer note from a non-moderator rejected", ns.GuildLog:GetOfficer(officerId) == nil)
+    Send(LEADER, Msg("OM", "D", ALICE, now, 3001, "", now, "on guild"), "GUILD")
+    Expect("officer data sent on the GUILD channel rejected", ns.GuildLog:GetOfficer(officerId) == nil)
+    Send(MALLORY, Msg("OM", "D", ALICE, now, 3001, "", now, "outsider"), "WHISPER")
+    Expect("whisper from a non-guildie rejected", ns.GuildLog:GetOfficer(officerId) == nil)
+    Send(LEADER, Msg("OM", "D", ALICE, now, 3001, "", now, "duplicate item spam"), "WHISPER")
+    local note = ns.GuildLog:GetOfficer(officerId)
+    Expect("officer note from the guild leader by whisper accepted", note and note.reason == "duplicate item spam")
+
+    -- Unknown types and floods
+    before = Comm.stats.accepted
     Send(ALICE, Msg("ZZ", "boom"))
     Expect("unknown message type dropped", Comm.stats.accepted == before)
     before = Comm.stats.accepted
@@ -160,7 +206,8 @@ local function SecurityTest()
     end
     Wipe()
     ns.testGuildKey = KEY
-    Comm:TestBegin({ [ALICE] = 1, [BOB] = 2 })
+    -- You are rank 1 here too, so the officer-log checks have someone allowed to read it.
+    Comm:TestBegin({ [ALICE] = 1, [BOB] = 2, [LEADER] = 0, [ns:PlayerName()] = 1 })
     local ok, results = pcall(Run)
     local suppressed = Comm:TestEnd()
     ns.testGuildKey = nil

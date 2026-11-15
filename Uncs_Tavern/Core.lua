@@ -151,7 +151,7 @@ end
 ---------------------------------------------------------------------------
 -- Saved variables (with dbVersion + migrations)
 ---------------------------------------------------------------------------
-local DB_VERSION      = 2
+local DB_VERSION      = 3
 local CHAR_DB_VERSION = 2
 
 local DEFAULTS = {
@@ -173,6 +173,11 @@ local DEFAULTS = {
     roster   = {},
     pvp      = {}, -- [guildKey][name] = guildmates' shared PvP stats
     seenItems = {}, -- [itemID] = true, items seen in bags (wishlist search)
+    -- Phase B (Permissions.lua, Moderation.lua, GuildLog.lua), all per guild key:
+    perms      = {}, -- [guildKey] = { t, mod, log, days, ranks }: rank config from the guild leader
+    modActions = {}, -- [guildKey][id] = my own moderator actions (re-announced for 14 days)
+    guildLog   = {}, -- [guildKey][id] = public guild log entries
+    officerLog = {}, -- [guildKey][id] = officer log entries (kept only if my rank may see them)
 }
 ns.DEFAULT_SETTINGS = DEFAULTS.settings -- read-only, for the Settings "Defaults" button
 
@@ -193,6 +198,8 @@ local MIGRATIONS      = {
             if type(bucket) == "table" then bucket.lastSync = nil end
         end
     end,
+    -- 3 (Phase B): rank permissions and guild log tables (ApplyDefaults adds them).
+    [3] = function() end,
 }
 local CHAR_MIGRATIONS = {
     -- 2: "no-honor kills" renamed to "dishonorable kills".

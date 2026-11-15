@@ -290,6 +290,7 @@ local function RowOnEnter(row)
     end
     GameTooltip:AddLine(date("Added %Y-%m-%d %H:%M", req.created), 0.5, 0.5, 0.5)
     if not req.rule then GameTooltip:AddLine("Hover the icon for item details", 0.5, 0.5, 0.5) end
+    ns:Fire("WISHLIST_ROW_TOOLTIP", GameTooltip, req) -- other modules add lines (Moderation.lua)
     GameTooltip:Show()
 end
 
@@ -398,6 +399,11 @@ local function InitRow(row, entry)
 
         row:SetScript("OnEnter", RowOnEnter)
         row:SetScript("OnLeave", GameTooltip_Hide)
+        -- Right-click: other modules offer actions (Moderation.lua's moderator menu).
+        row:RegisterForClicks("RightButtonUp")
+        row:SetScript("OnClick", function(self, button)
+            if button == "RightButton" and self.data then ns:Fire("WISHLIST_ROW_MENU", self, self.data) end
+        end)
     end
 
     if row.layoutVersion ~= layoutVersion then LayoutRow(row) end

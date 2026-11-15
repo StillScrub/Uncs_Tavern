@@ -21,8 +21,8 @@
 -- requestExpiryDays days plus everything after, so counts can differ a little between
 -- players.
 --
--- Tab: Items received | Items sent side by side. "Show all completed guild requests"
--- (off every time you log in) swaps them for every fulfilled request this client knows.
+-- Tab: Items received | Items sent side by side ("My history"). Other modules add views
+-- with History:RegisterView (GuildLog.lua: Guild log, Officer log).
 local _, ns = ...
 local W = ns.Wishlist
 
@@ -215,7 +215,7 @@ local ARMOR_ICONS = {
     "Interface\\Icons\\INV_Chest_Chain_05", "Interface\\Icons\\INV_Chest_Plate06",
 }
 
-local panel, showAll, lists = nil, false, {}
+local panel, lists = nil, {}
 
 local function EntryIcon(e)
     if e.rule then return ARMOR_ICONS[e.armor] or "Interface\\Icons\\INV_Misc_QuestionMark" end
@@ -362,45 +362,88 @@ end
 local function When(t) return t and date("%b %d %H:%M", t) or "" end
 local GREY = { r = 0.6, g = 0.6, b = 0.6 }
 
+-- For other modules' views (GuildLog.lua): the same lists, icons and names.
+History.MakeList, History.EntryIcon, History.EntryName = MakeList, EntryIcon, EntryName
+History.When, History.GREY, History.Describe = When, GREY, Describe
+
+---------------------------------------------------------------------------
+-- Views: "My history" (here) plus views other modules add with
+--   History:RegisterView({ key, label, order, intro = "..." | fn, shown = fn,
+--                          build = fn(frame), refresh = fn() })
+---------------------------------------------------------------------------
+local views = {
+    { key = "mine", label = "My history", order = 10, intro = "Your own wishlist deliveries. Only you see this." },
+}
+local current = "mine"
+local viewButtons, introText = {}, nil
+
+function History:RegisterView(v)
+    views[#views + 1] = v
+end
+
+local function View(key)
+    for _, v in ipairs(views) do if v.key == key then return v end end
+end
+
+local function Visible(v) return not v.shown or v.shown() end
+
 local function Refresh()
     if not panel then return end
-    lists.received.frame:SetShown(not showAll)
-    lists.sent.frame:SetShown(not showAll)
-    lists.all.frame:SetShown(showAll)
-    if showAll then
-        local done = {}
-        for _, req in ipairs(W:All()) do
-            if not req.deleted and (req.received or 0) >= req.qty then done[#done + 1] = req end
+    if not Visible(View(current) or {}) then current = "mine" end
+    local x = -4
+    for i = #views, 1, -1 do
+        local v, b = views[i], viewButtons[views[i].key]
+        if b then
+            b:SetShown(Visible(v))
+            if Visible(v) then
+                b:ClearAllPoints()
+                b:SetPoint("TOPRIGHT", panel, "TOPRIGHT", x, -4)
+                x = x - b:GetWidth() - 4
+                if v.key == current then b:LockHighlight() else b:UnlockHighlight() end
+            end
         end
-        table.sort(done, function(a, b) return a.updated > b.updated end)
-        lists.all:SetEntries(done, "No completed requests yet.")
-    else
+    end
+    local v = View(current)
+    introText:SetText(type(v.intro) == "function" and v.intro() or v.intro or "")
+    local mine = current == "mine"
+    lists.received.frame:SetShown(mine)
+    lists.sent.frame:SetShown(mine)
+    for _, o in ipairs(views) do
+        if o.frame then o.frame:SetShown(o.key == current) end
+    end
+    if mine then
         lists.received:SetEntries(History:Entries("received"), "Nothing received yet.")
         lists.sent:SetEntries(History:Entries("sent"), "Nothing sent yet.")
+    elseif v.refresh then
+        v.refresh()
     end
 end
+History.Refresh = function() if panel and panel:IsVisible() then Refresh() end end
 
 local function Build(p)
     panel = p
-    local intro = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    intro:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -8)
-    intro:SetText("Your own wishlist deliveries. Only you see this.")
+    introText = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    introText:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -8)
+    introText:SetPoint("RIGHT", panel, "RIGHT", -340, 0)
+    introText:SetJustifyH("LEFT")
+    introText:SetWordWrap(false)
 
-    local check = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-    check:SetSize(24, 24)
-    check:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -190, -3)
-    local label = check.Text or check.text
-    if not label then
-        label = check:CreateFontString(nil, "ARTWORK")
-        label:SetPoint("LEFT", check, "RIGHT", 2, 0)
+    table.sort(views, function(a, b) return (a.order or 100) < (b.order or 100) end)
+    for _, v in ipairs(views) do
+        local b = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+        b:SetHeight(22)
+        b:SetText(v.label)
+        b:SetWidth(math.max(90, b:GetTextWidth() + 24))
+        b:SetScript("OnClick", function() current = v.key Refresh() end)
+        viewButtons[v.key] = b
+        if v.build then
+            v.frame = CreateFrame("Frame", nil, panel)
+            v.frame:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -34)
+            v.frame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -4, 4)
+            v.frame:Hide()
+            v.build(v.frame)
+        end
     end
-    label:SetFontObject("GameFontHighlightSmall")
-    label:SetText("Show all completed guild requests")
-    check:SetChecked(false)
-    check:SetScript("OnClick", function(self)
-        showAll = self:GetChecked() and true or false
-        Refresh()
-    end)
 
     local qtyText = function(e) return "x" .. tostring(e.qty or 0) end
     local nameText = function(e) return EntryName(e) end
@@ -417,31 +460,14 @@ local function Build(p)
         { label = "To", width = 60, fit = true, get = function(e) return e.who or "?" end },
         { label = "When", width = 60, fit = true, get = function(e) return When(e.t), GREY end },
     })
-    lists.all = MakeList(panel, "Completed guild requests", {
-        { label = "Item", width = 170, flex = 2,
-          icon = function(req) return EntryIcon(Describe(req)) end,
-          get = function(req) return EntryName(Describe(req)) end },
-        { label = "Qty", width = 40, get = function(req) return "x" .. req.qty end },
-        { label = "Requester", width = 80, fit = true, get = function(req) return req.requester end },
-        { label = "Sent by", width = 150, flex = 1, get = function(req)
-            local names = {}
-            for who, n in pairs(req.receivedFrom or {}) do names[#names + 1] = ("%s (%d)"):format(who, n) end
-            return #names > 0 and table.concat(names, ", ") or "—"
-        end },
-        { label = "Done", width = 60, fit = true, get = function(req) return When(req.updated), GREY end },
-    })
-
     local top = -34
     lists.received.frame:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, top)
     lists.received.frame:SetPoint("BOTTOMRIGHT", panel, "BOTTOM", -6, 4)
     lists.sent.frame:SetPoint("TOPLEFT", panel, "TOP", 6, top)
     lists.sent.frame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -4, 4)
-    lists.all.frame:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, top)
-    lists.all.frame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -4, 4)
 
     panel:SetScript("OnShow", Refresh)
     ns:RegisterCallback("HISTORY_CHANGED", function() if panel:IsVisible() then Refresh() end end)
-    ns:RegisterCallback("WISHLIST_CHANGED", function() if showAll and panel:IsVisible() then Refresh() end end)
     Refresh()
 end
 

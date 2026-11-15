@@ -42,7 +42,11 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 
 **History tab**
 - Your own **Items received** and **Items sent** through the wishlist (only you see it).
-- Tick **Show all completed guild requests** to see every finished request and who filled it.
+- **Guild log:** every delivery in the guild marked **Confirmed** (helper and receiver agree), **Unconfirmed** (only one side) or **Mismatch** (in red), plus moderator actions.
+- **Officer log** (ranks the guild leader allows): moderator actions with reasons, and every mismatch.
+
+**Rank permissions** (Settings > Guild > Permissions)
+- The guild leader picks which ranks can **moderate** (remove any request, clear any claim, by right-clicking a Wishlist row) and which can **see the officer log**. Default: guild leader only. Every action is logged.
 
 **Alerts**
 - Item tooltips show who in the guild wants an item ("Wanted by <name>: N more · price").
@@ -98,7 +102,6 @@ The minimap button works like `/tavern` (right-click opens the Settings tab).
 ## Roadmap
 
 Coming soon:
-- **Rank permissions and a guild log:** the guild leader picks which ranks can moderate requests and see the officer log.
 - **Mailbox "Guild Requests" panel:** pick a request and get a ready-to-send mail draft (recipient, items, COD). You press Send.
 
 ## Privacy & Safety
