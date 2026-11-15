@@ -97,6 +97,7 @@ end
 ns:RegisterEvent("PLAYER_LOGIN", UpdateVisibility)
 
 ns.Settings:RegisterToggle({
+    category = "minimap",
     key = "minimapButton",
     label = "Show minimap button",
     description = "Left-click opens or closes Unc's Tavern, right-click opens its Settings. Drag to move.",

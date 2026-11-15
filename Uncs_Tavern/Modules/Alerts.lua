@@ -433,34 +433,39 @@ end)
 -- Settings
 ---------------------------------------------------------------------------
 ns.Settings:RegisterToggle({
+    category = "alerts",
     key = "tooltipLines",
-    label = "Show guild requests on item tooltips",
+    label = "Guild requests on tooltips",
     description = "\"Wanted by <name>: N more\" on items someone in the guild has asked for.",
     order = 40,
 })
 ns.Settings:RegisterToggle({
+    category = "alerts",
     key = "vendorPopup",
-    label = "Remind me at vendors, the auction house and the mailbox",
-    description = "Once per login: a popup when items in your bags are on the guild wishlist. Never blocks selling.",
+    label = "Wishlist reminder popup",
+    description = "Once per login, at a vendor, the auction house or the mailbox: a popup when items in your bags are on the guild wishlist. Never blocks selling.",
     order = 41,
     onChange = function(v) if not v then HidePopup() end end,
 })
 ns.Settings:RegisterToggle({
+    category = "alerts",
     key = "sellWarnings",
-    label = "Warn me when I sell a wanted item",
+    label = "Warn when selling a wanted item",
     description = "A red warning if you sell an item a guildmate asked for, pointing to the vendor's Buyback tab.",
     order = 41.5,
 })
 ns.Settings:RegisterToggle({
+    category = "alerts",
     key = "codWarning",
-    label = "Warn me when a guildmate's COD is too high",
+    label = "Warn when a COD is too high",
     description = "A red warning if a guildmate's mail asks more COD than your wishlist price.",
     order = 41.6,
 })
 ns.Settings:RegisterToggle({
+    category = "minimap",
     key = "minimapBadge",
-    label = "Badge on the minimap button for new requests",
-    description = "Counts guildmates' new requests until you open the Wishlist tab.",
-    order = 42,
+    label = "New request badge",
+    description = "A number on the minimap button counting guildmates' new requests until you open the Wishlist tab.",
+    order = 95,
     onChange = UpdateBadge,
 })

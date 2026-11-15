@@ -229,7 +229,10 @@ local function EntryName(e)
     return name or ("item " .. tostring(e.itemID)), (c and (c.color or c)) or HIGHLIGHT_FONT_COLOR
 end
 
--- One list: columns { label, width, flex, get(entry) -> text, r, g, b }
+-- One list: columns { label, width, flex, fit, get(entry) -> text, r, g, b }
+-- fit = true: the column is as wide as its longest text (header included), at least
+-- `width`, at most FIT_MAX. Flex columns (the item) take whatever is left.
+local FIT_MAX = 180
 local function MakeList(parent, title, cols)
     local l = { cols = cols, headers = {} }
     l.frame = CreateFrame("Frame", nil, parent)
@@ -252,6 +255,11 @@ local function MakeList(parent, title, cols)
         fs:SetText(col.label)
         l.headers[i] = fs
     end
+    l.probe = l.frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    l.probe:SetAlpha(0) -- invisible but still measured (some clients give 0 for hidden text)
+    l.probe:SetPoint("TOPLEFT")
+    for _, col in ipairs(cols) do col.minWidth = col.width end
+
     local divider = l.frame:CreateTexture(nil, "ARTWORK")
     divider:SetColorTexture(1, 0.82, 0, 0.25)
     divider:SetHeight(1)
@@ -308,16 +316,42 @@ local function MakeList(parent, title, cols)
             l.headers[i]:SetWidth(col.w - 8)
         end
     end
-    ns.Columns.Watch(l.scrollBox, cols, function()
+    local function Relayout()
         l.version = l.version + 1
         LayoutHeaders()
         l.scrollBox:ForEachFrame(LayoutRow)
-    end)
+    end
+    ns.Columns.Watch(l.scrollBox, cols, Relayout)
     LayoutHeaders()
+
+    -- The probe has no width set, so this is the text's full width, never cut off.
+    local function TextWidth(fs, text)
+        fs:SetText(text or "")
+        return math.ceil(fs:GetStringWidth() or 0) + 10 -- 8 cell padding + a little air
+    end
+    -- Size the fit columns to this content; true if any width changed.
+    local function FitColumns(entries)
+        local changed = false
+        for i, col in ipairs(cols) do
+            if col.fit then
+                local w = math.max(col.minWidth, TextWidth(l.probe, col.label))
+                for _, e in ipairs(entries) do
+                    w = math.max(w, TextWidth(l.probe, (col.get(e))))
+                end
+                w = math.min(w, FIT_MAX)
+                if w ~= col.width then col.width, changed = w, true end
+            end
+        end
+        return changed
+    end
 
     function l:SetEntries(entries, emptyText)
         local wrapped = {}
         for i, e in ipairs(entries) do wrapped[i] = { e = e, index = i } end
+        if FitColumns(entries) then
+            ns.Columns.Layout(cols, self.scrollBox:GetWidth())
+            Relayout()
+        end
         self.scrollBox:SetDataProvider(CreateDataProvider(wrapped), ScrollBoxConstants.RetainScrollPosition)
         self.empty:SetText(emptyText)
         self.empty:SetShown(#entries == 0)
@@ -372,29 +406,29 @@ local function Build(p)
     local nameText = function(e) return EntryName(e) end
 
     lists.received = MakeList(panel, "Items received", {
-        { label = "Item", width = 120, flex = 1, icon = EntryIcon, get = nameText },
+        { label = "Item", width = 100, flex = 1, icon = EntryIcon, get = nameText },
         { label = "Qty", width = 40, get = qtyText },
-        { label = "From", width = 110, get = function(e) return e.who or "?" end },
-        { label = "When", width = 80, get = function(e) return When(e.t), GREY end },
+        { label = "From", width = 60, fit = true, get = function(e) return e.who or "?" end },
+        { label = "When", width = 60, fit = true, get = function(e) return When(e.t), GREY end },
     })
     lists.sent = MakeList(panel, "Items sent", {
-        { label = "Item", width = 120, flex = 1, icon = EntryIcon, get = nameText },
+        { label = "Item", width = 100, flex = 1, icon = EntryIcon, get = nameText },
         { label = "Qty", width = 40, get = qtyText },
-        { label = "To", width = 110, get = function(e) return e.who or "?" end },
-        { label = "When", width = 80, get = function(e) return When(e.t), GREY end },
+        { label = "To", width = 60, fit = true, get = function(e) return e.who or "?" end },
+        { label = "When", width = 60, fit = true, get = function(e) return When(e.t), GREY end },
     })
     lists.all = MakeList(panel, "Completed guild requests", {
         { label = "Item", width = 170, flex = 2,
           icon = function(req) return EntryIcon(Describe(req)) end,
           get = function(req) return EntryName(Describe(req)) end },
         { label = "Qty", width = 40, get = function(req) return "x" .. req.qty end },
-        { label = "Requester", width = 130, get = function(req) return req.requester end },
+        { label = "Requester", width = 80, fit = true, get = function(req) return req.requester end },
         { label = "Sent by", width = 150, flex = 1, get = function(req)
             local names = {}
             for who, n in pairs(req.receivedFrom or {}) do names[#names + 1] = ("%s (%d)"):format(who, n) end
             return #names > 0 and table.concat(names, ", ") or "—"
         end },
-        { label = "Done", width = 80, get = function(req) return When(req.updated), GREY end },
+        { label = "Done", width = 60, fit = true, get = function(req) return When(req.updated), GREY end },
     })
 
     local top = -34

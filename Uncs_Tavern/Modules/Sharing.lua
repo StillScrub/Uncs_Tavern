@@ -132,19 +132,19 @@ local function ConfirmDelete()
 end
 
 ---------------------------------------------------------------------------
--- Settings (right column)
+-- Settings: the "Sharing" page in the "Guild" group
 ---------------------------------------------------------------------------
 local function Off() return not Comm:IsSharing() end
 
-ns.Settings:RegisterHeader({
-    column = 2, order = 1,
-    text = function()
+ns.Settings:RegisterCategory({
+    key = "sharing", name = "Sharing", group = "Guild", order = 100,
+    title = function()
         local g = GuildName()
         return g ~= "" and ("Sharing with " .. g) or "Sharing (not in a guild)"
     end,
 })
 ns.Settings:RegisterToggle({
-    column = 2, order = 2,
+    category = "sharing", order = 2,
     label = "Share with this guild",
     description = "Off: nothing is sent or accepted. Only this guild's members with the addon receive it.",
     get = function() local s = Comm:Sharing() return s and s.optIn == true end,
@@ -152,7 +152,7 @@ ns.Settings:RegisterToggle({
     disabled = function() return not IsInGuild() end,
 })
 ns.Settings:RegisterToggle({
-    column = 2, order = 3,
+    category = "sharing", order = 3, indent = 1,
     label = "Wishlist",
     description = "Your requests, claims, and what you've received.",
     get = function() local s = Comm:Sharing() return s and s.wishlist ~= false end,
@@ -160,7 +160,7 @@ ns.Settings:RegisterToggle({
     disabled = Off,
 })
 ns.Settings:RegisterToggle({
-    column = 2, order = 4,
+    category = "sharing", order = 4, indent = 1,
     label = "PvP stats",
     description = "Your kills, deaths, killing blows and \"Most killed by\".",
     get = function() local s = Comm:Sharing() return s and s.pvp ~= false end,
@@ -168,7 +168,7 @@ ns.Settings:RegisterToggle({
     disabled = Off,
 })
 ns.Settings:RegisterToggle({
-    column = 2, order = 5,
+    category = "sharing", order = 5, indent = 1,
     label = "Helped / History",
     description = "Who delivered items to you (their Helped).",
     get = function() local s = Comm:Sharing() return s and s.helped ~= false end,
@@ -176,16 +176,19 @@ ns.Settings:RegisterToggle({
     disabled = Off,
 })
 ns.Settings:RegisterChoice({
-    column = 2, order = 6,
+    category = "sharing", order = 6,
     key = "requestExpiryDays",
     label = "Keep others' requests",
+    description = "Guildmates' requests are forgotten after this many days without hearing from their owner.",
     choices = { 7, 14, 30, 60 },
     format = function(v) return ("%d days unseen"):format(tonumber(v) or 14) end,
     onChange = function() if ns.Wishlist then ns.Wishlist:Purge() end end,
 })
 ns.Settings:RegisterButton({
-    column = 2, order = 7,
+    category = "sharing", order = 7,
     label = "Delete this guild's data",
+    buttonText = "Delete",
+    description = "Removes this guild's wishlist, claims, PvP stats and Helped from this account, and this character's History. Asks first.",
     disabled = function() return not ns:GuildKey() end,
     onClick = ConfirmDelete,
 })

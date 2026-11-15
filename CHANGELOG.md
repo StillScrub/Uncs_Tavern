@@ -24,12 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The wishlist popup at vendors, the auction house and the mailbox shows once per login, with **Show me** / **Ignore forever**. The sell warning has its own setting.
 - The COD warning has its own setting.
 - **Pay up to** in the Wishlist form is greyed out for now, with a note: COD mail fails on the WoW: Forever server ("Internal mail database error", even with no addons). New requests are Gift until the server is fixed.
-- Settings tab scrolls when the window is small; its buttons line up at the same width.
+- Settings tab redone like the game's Options window: a category list on the left (General, Alerts, Minimap, Sharing), the page on the right with a Defaults button, the game's checkboxes and dropdown, descriptions in hover tooltips.
+- New addon icon (window portrait, minimap button and the AddOns list).
 
 ### Fixed
 - After using Claim or Got, the guild window's "Add member" box only accepted numbers, and other Blizzard popups could be blocked. The addon no longer uses Blizzard's shared popups at all; it has its own dialog.
 - Requests and claims of players who left or were kicked from the guild are hidden at once, so nobody mails items to them.
 - PvP: a Lua error on every party kill ("secret string value") on the Midnight client.
+- History: long names in the From / To columns were cut off ("Fumble..."). The name and date columns now size themselves to the longest entry; the Item column takes the rest and grows when you widen the window.
 
 ## [0.3.0] - 2026-11-14
 

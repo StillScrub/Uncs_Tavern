@@ -72,10 +72,10 @@ A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but
 - Only players with the addon post their own level-ups.
 
 ## 7. Settings tab
-- Left: level-up posts, tooltip lines, vendor/AH/mail popup, sell warning, COD warning, minimap badge, minimap button. Buttons in a column share one width. The tab scrolls when the window is small.
+- Laid out like the game's Options window: a category list on the left in groups, the chosen category's page on the right (big title, divider, **Defaults** button that resets that page after asking), rows with the setting's name on the left and its control (checkbox, < dropdown > arrows, button) in a column; descriptions show in a tooltip on hover, rows highlight on hover. Blizzard's own art (atlases, dropdown template) when the client has it, plain fallbacks otherwise.
+- Categories: **Unc's Tavern** group: General (level-up posts), Alerts (tooltip lines, wishlist reminder popup, sell warning, COD warning), Minimap (minimap button, new request badge). **Guild** group: Sharing (page title "Sharing with <guild>", see 8; the category switches are indented under the master switch). Modules add categories with `RegisterCategory`.
 - Requests and claims of players no longer in the guild (left or kicked) are hidden everywhere (lists, tooltips, popup) as soon as the roster shows it; they come back if the player rejoins.
 - Our dialogs (claim, got, delete, level-up) are our own frames, never Blizzard's shared StaticPopup, so the game's own popups (guild invite, send money) are untouched.
-- Right: sharing with this guild (see 8).
 
 ## 8. Security & sharing
 Full rules: "Security rules (always apply)" in CLAUDE.md. In short:

@@ -57,7 +57,7 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 
 **Minimap button & Settings**
 - Minimap button: left-click opens or closes Unc's Tavern (swapping with the guild window if it's open), right-click opens its Settings; drag to move.
-- Settings tab: level-up posts, alerts and the minimap button on the left; what you share with your guild on the right.
+- Settings tab in the style of the game's Options window: categories on the left (General, Alerts, Minimap, Sharing), their settings on the right, a Defaults button per page; hover a setting for its description.
 
 ## Screenshots
 

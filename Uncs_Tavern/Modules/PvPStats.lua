@@ -223,8 +223,12 @@ local function OnPartyKill(_, attackerGUID, targetGUID)
     -- Midnight hides some event values as "secret" (BugSack: comparing them is an error).
     -- We can't read those, so that kill isn't counted here; the honor/stat signals still are.
     if issecretvalue and (issecretvalue(attackerGUID) or issecretvalue(targetGUID)) then return end
-    if attackerGUID ~= UnitGUID("player") and attackerGUID ~= UnitGUID("pet") then return end
-    if not targetGUID:match("^Player%-") then return end
+    -- Belt and braces in case issecretvalue is missing: any error comparing means "skip".
+    local ok, mine = pcall(function()
+        return (attackerGUID == UnitGUID("player") or attackerGUID == UnitGUID("pet"))
+            and targetGUID:match("^Player%-") ~= nil
+    end)
+    if not ok or not mine then return end
 
     local victim = select(6, GetPlayerInfoByGUID(targetGUID)) or "?"
     local p = Mine()

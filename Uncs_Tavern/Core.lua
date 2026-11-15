@@ -174,6 +174,7 @@ local DEFAULTS = {
     pvp      = {}, -- [guildKey][name] = guildmates' shared PvP stats
     seenItems = {}, -- [itemID] = true, items seen in bags (wishlist search)
 }
+ns.DEFAULT_SETTINGS = DEFAULTS.settings -- read-only, for the Settings "Defaults" button
 
 local CHAR_DEFAULTS = {
     -- My own PvP tracking (Modules\PvPStats.lua). Lifetime honorable kills come from the game.

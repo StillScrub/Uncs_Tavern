@@ -86,8 +86,9 @@ end
 ns:RegisterEvent("PLAYER_LEVEL_UP", OnLevelUp)
 
 ns.Settings:RegisterToggle({
+    category = "general",
     key = "levelUpPosts",
-    label = "Offer to post my level-ups to guild chat",
+    label = "Offer level-up posts",
     description = "On level-up a small popup asks to post \"[Unc's Tavern] <Name> reached level <N>!\". "
         .. "Click Post to send it (the game only lets addons post to guild when you click).\n" .. ns.DISCORD_NOTE,
     order = 10,
