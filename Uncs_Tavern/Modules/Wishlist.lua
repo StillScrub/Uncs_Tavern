@@ -198,110 +198,49 @@ local function TakeCursorItem()
 end
 
 ---------------------------------------------------------------------------
--- Claim popup: "How many will you send?" (0 cancels your claim)
----------------------------------------------------------------------------
-local CLAIM_POPUP = "UNCSTAVERN_CLAIM"
-
-local function PopupEditBox(popup)
-    return popup.editBox or popup.EditBox or (popup.GetEditBox and popup:GetEditBox())
-end
-
-local function SubmitClaim(popup, reqId)
-    local box = PopupEditBox(popup)
-    local claim, err = W:SetClaim(reqId, box and box:GetText())
-    if not claim then
-        ns:Print(err)
-    elseif claim.deleted then
-        ns:Print("Claim cancelled.")
-    else
-        ns:Print(("You claimed %d. The requester and guild can see it."):format(claim.qty))
-    end
-end
-
-StaticPopupDialogs[CLAIM_POPUP] = {
-    text = "How many will you send?\n%s\n\n(0 cancels your claim)",
-    button1 = "Claim",
-    button2 = "Cancel",
-    hasEditBox = true,
-    maxLetters = 4,
-    OnShow = function(self, data)
-        local box = PopupEditBox(self)
-        if box and data then
-            box:SetNumeric(true)
-            box:SetText(tostring(data.default))
-            box:HighlightText()
-            box:SetFocus()
-        end
-    end,
-    OnAccept = function(self, data)
-        if data then SubmitClaim(self, data.reqId) end
-    end,
-    EditBoxOnEnterPressed = function(box, data)
-        local popup = box:GetParent()
-        if data then SubmitClaim(popup, data.reqId) end
-        popup:Hide()
-    end,
-    EditBoxOnEscapePressed = function(box) box:GetParent():Hide() end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
-
-local function OpenClaim(req)
-    local mine = W:MyClaim(req.id)
-    local free = W:Unclaimed(req, true)
-    local line = ("%s for %s (%d still unclaimed)"):format(W:Label(req), req.requester, free)
-    StaticPopup_Show(CLAIM_POPUP, line, nil, { reqId = req.id, default = mine and mine.qty or free })
-end
-
--- "Got" popup (own requests): fix the received count by hand, e.g. after a trade
+-- Claim dialog: "How many will you send?" (0 cancels your claim)
+-- "Got" dialog (own requests): fix the received count by hand, e.g. after a trade
 -- or items you gathered yourself. Mail is counted automatically.
-local GOT_POPUP = "UNCSTAVERN_GOT"
-
-local function SubmitGot(popup, reqId)
-    local box = PopupEditBox(popup)
-    local req, err = W:SetReceived(reqId, box and box:GetText())
-    if not req then
-        ns:Print(err)
-    elseif not W:IsOpen(req) then
-        ns:Print("Request complete - removed from the wishlist.")
-    end
+-- Both use our own dialog (UI\Dialog.lua), never Blizzard's shared StaticPopup.
+---------------------------------------------------------------------------
+local function OpenClaim(req)
+    local reqId = req.id
+    local mine = W:MyClaim(reqId)
+    local free = W:Unclaimed(req, true)
+    ns.Dialog:Show({
+        text = ("How many will you send?\n%s for %s (%d still unclaimed)\n\n(0 cancels your claim)")
+            :format(W:Label(req), req.requester, free),
+        accept = "Claim",
+        edit = { numeric = true, maxLetters = 4, default = mine and mine.qty or free },
+        onAccept = function(text)
+            local claim, err = W:SetClaim(reqId, text)
+            if not claim then
+                ns:Print(err)
+            elseif claim.deleted then
+                ns:Print("Claim cancelled.")
+            else
+                ns:Print(("You claimed %d. The requester and guild can see it."):format(claim.qty))
+            end
+        end,
+    })
 end
-
-StaticPopupDialogs[GOT_POPUP] = {
-    text = "How many have you received so far?\n%s",
-    button1 = "Save",
-    button2 = "Cancel",
-    hasEditBox = true,
-    maxLetters = 4,
-    OnShow = function(self, data)
-        local box = PopupEditBox(self)
-        if box and data then
-            box:SetNumeric(true)
-            box:SetText(tostring(data.default))
-            box:HighlightText()
-            box:SetFocus()
-        end
-    end,
-    OnAccept = function(self, data)
-        if data then SubmitGot(self, data.reqId) end
-    end,
-    EditBoxOnEnterPressed = function(box, data)
-        local popup = box:GetParent()
-        if data then SubmitGot(popup, data.reqId) end
-        popup:Hide()
-    end,
-    EditBoxOnEscapePressed = function(box) box:GetParent():Hide() end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
 
 local function OpenGot(req)
-    local line = ("%s (wanted %d; reaching %d completes it)"):format(W:Label(req), req.qty, req.qty)
-    StaticPopup_Show(GOT_POPUP, line, nil, { reqId = req.id, default = req.received or 0 })
+    local reqId = req.id
+    ns.Dialog:Show({
+        text = ("How many have you received so far?\n%s (wanted %d; reaching %d completes it)")
+            :format(W:Label(req), req.qty, req.qty),
+        accept = "Save",
+        edit = { numeric = true, maxLetters = 4, default = req.received or 0 },
+        onAccept = function(text)
+            local saved, err = W:SetReceived(reqId, text)
+            if not saved then
+                ns:Print(err)
+            elseif not W:IsOpen(saved) then
+                ns:Print("Request complete - removed from the wishlist.")
+            end
+        end,
+    })
 end
 
 ---------------------------------------------------------------------------

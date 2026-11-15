@@ -3,13 +3,14 @@
 --   * Tooltip lines: on any item tooltip, "Wanted by <name>: N more · price" for every
 --     open request the item fits (item requests and rule requests). Your own requests
 --     show as "On your wishlist: N more".
---   * Popup every time you open a vendor, auction house or mailbox: "N items in your
---     bags are on the guild wishlist", listing them, with Show me / Not now. It sits at
---     the top of the screen and never blocks selling.
+--   * Popup once per login, the first time you open a vendor, auction house or mailbox
+--     with items in your bags that are on the guild wishlist: "N items in your bags are
+--     on the guild wishlist", listing them, with Show me / Ignore forever (the X just
+--     closes it). It sits at the top of the screen and never blocks selling.
 --   * Sell warning: if you sell an item a guildmate asked for, a red on-screen and chat
 --     message names it and points to the vendor's Buyback tab. (The sale itself is never
 --     stopped; we only notice it afterwards, from the buyback list.)
---   * COD warning: a guildmate's mail whose items are all on your wishlist, but whose
+--   * COD warning (disabled for now, see COD_BROKEN): a guildmate's mail whose items are all on your wishlist, but whose
 --     COD is more than quantity x your price, gets a red warning when the mailbox shows
 --     it. Blizzard's own COD confirmation is never touched; you still decide.
 --   * Minimap badge: how many guildmates' requests arrived since you last opened the
@@ -166,18 +167,27 @@ local function CreatePopup()
         ns.MainFrame:Show("wishlist")
     end)
 
-    local later = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
-    later:SetSize(100, 22)
-    later:SetPoint("BOTTOMLEFT", popup, "BOTTOM", 4, 10)
-    later:SetText("Not now")
-    later:SetScript("OnClick", function() popup:Hide() end)
+    local ignore = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
+    ignore:SetSize(110, 22)
+    ignore:SetPoint("BOTTOMLEFT", popup, "BOTTOM", 4, 10)
+    ignore:SetText("Ignore forever")
+    ignore:SetScript("OnClick", function()
+        popup:Hide()
+        ns.db.settings.vendorPopup = false
+        ns:Print("The wishlist reminder is off. Turn it back on in Settings. "
+            .. "(The sell warning stays on.)")
+        ns:Fire("SETTINGS_REFRESH")
+    end)
     popup:Hide()
 end
 
+local shownThisSession = false -- once per login, whichever window comes first
+
 local function ShowPopup()
-    if not Setting("vendorPopup") or not IsInGuild() then return end
+    if shownThisSession or not Setting("vendorPopup") or not IsInGuild() then return end
     local list, total = Alerts:Fillable()
     if total == 0 then return end
+    shownThisSession = true
     if not popup then CreatePopup() end
 
     popup.header:SetText(total == 1 and "1 item in your bags is on the guild wishlist:"
@@ -228,7 +238,7 @@ local function BuybackLinks()
 end
 
 local function WarnSold(link)
-    if not Setting("vendorPopup") or not link or link == "" then return end
+    if not Setting("sellWarnings") or not link or link == "" then return end
     local itemID = C_Item.GetItemInfoInstant(link)
     for _, e in ipairs(RequestsFor(itemID, link)) do
         if not W:IsMine(e.req) then
@@ -277,6 +287,12 @@ ns:RegisterEvent("AUCTION_HOUSE_CLOSED", HidePopup)
 ---------------------------------------------------------------------------
 -- COD warning (mailbox)
 ---------------------------------------------------------------------------
+-- Disabled for now: COD mail fails on the WoW: Forever server ("Internal mail database
+-- error", confirmed 2026-11-15 with all addons off). The code stays; flip this to false
+-- once COD works again and the Settings switch becomes usable.
+local COD_BROKEN = true
+local COD_NOTE = "Cash on Delivery mail is broken on WoW: Forever right now: the server answers 'Internal mail database error' even with no addons. This warning is disabled until it's fixed."
+
 local MAX_ATTACH = ATTACHMENTS_MAX_RECEIVE or 16
 local codWarned = {} -- mails already warned about this session
 
@@ -300,7 +316,7 @@ local function MyPrice(itemID, link, count)
 end
 
 local function CheckCOD()
-    if not Setting("vendorPopup") or not ns.Comm then return end
+    if COD_BROKEN or not Setting("codWarning") or not ns.Comm then return end
     for i = 1, (GetInboxNumItems and GetInboxNumItems() or 0) do
         local _, _, sender, _, _, cod, _, hasItem = GetInboxHeaderInfo(i)
         sender = sender and Short(sender)
@@ -431,9 +447,30 @@ ns.Settings:RegisterToggle({
 ns.Settings:RegisterToggle({
     key = "vendorPopup",
     label = "Remind me at vendors, the auction house and the mailbox",
-    description = "A popup when items in your bags are on the guild wishlist, and a warning if you sell one. Never blocks selling.",
+    description = "Once per login: a popup when items in your bags are on the guild wishlist. Never blocks selling.",
     order = 41,
     onChange = function(v) if not v then HidePopup() end end,
+})
+ns.Settings:RegisterToggle({
+    key = "sellWarnings",
+    label = "Warn me when I sell a wanted item",
+    description = "A red warning if you sell an item a guildmate asked for, pointing to the vendor's Buyback tab.",
+    order = 41.5,
+})
+ns.Settings:RegisterToggle({
+    key = "codWarning",
+    -- shown unticked while disabled, without changing the saved choice
+    get = function() return not COD_BROKEN and Setting("codWarning") end,
+    set = function(v) ns.db.settings.codWarning = v end,
+    label = "Warn me when a guildmate's COD is too high",
+    description = COD_BROKEN and "|cffff8040Disabled: COD mail is broken on the server right now (hover for details).|r"
+        or "A red warning if a guildmate's mail asks more COD than your wishlist price.",
+    tooltip = function()
+        return COD_BROKEN and COD_NOTE
+            or "A red warning if a guildmate's mail asks more COD than your wishlist price. Blizzard's own COD confirmation is never touched."
+    end,
+    disabled = function() return COD_BROKEN end,
+    order = 41.6,
 })
 ns.Settings:RegisterToggle({
     key = "minimapBadge",

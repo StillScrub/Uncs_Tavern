@@ -121,18 +121,38 @@ local function AskRoster()
     end
 end
 
+-- Fires "ROSTER_CHANGED" when someone joined or left (kicked members' requests are
+-- hidden at once; see Wishlist:List).
 local function RebuildRoster()
+    local before, beforeCount = {}, memberCount
+    for name in pairs(members) do before[name] = true end
     wipe(members)
     memberCount = 0
-    if not IsInGuild() then return end
-    for i = 1, GetNumGuildMembers() or 0 do
-        local full, _, rankIndex = GetGuildRosterInfo(i)
-        local name = Normalize(full)
-        if name then
-            members[name] = rankIndex
-            memberCount = memberCount + 1
+    if IsInGuild() then
+        for i = 1, GetNumGuildMembers() or 0 do
+            local full, _, rankIndex = GetGuildRosterInfo(i)
+            local name = Normalize(full)
+            if name then
+                members[name] = rankIndex
+                memberCount = memberCount + 1
+            end
         end
     end
+    -- Joined or left = the member set differs.
+    local changed = memberCount ~= beforeCount
+    if not changed then
+        for name in pairs(members) do
+            if not before[name] then changed = true break end
+        end
+    end
+    if changed then ns:Fire("ROSTER_CHANGED") end
+end
+
+-- True once we have a guild roster to check names against (it is empty for a moment
+-- after login).
+function Comm:RosterReady()
+    if test then return true end
+    return memberCount > 0
 end
 
 function Comm:IsMember(name)

@@ -3,6 +3,7 @@
 --                                order = 10, column = 1, onChange = function(value) end })
 --     Values live in ns.db.settings[key] (account-wide), unless the def gives its own
 --     get() / set(value). disabled() greys it out.
+--     tooltip = "..." | function shows on hover (also while greyed out).
 --   ns.Settings:RegisterHeader({ text = "..." | function, order, column })
 --   ns.Settings:RegisterText({ text = "..." | function, order, column })
 --   ns.Settings:RegisterButton({ label = "...", onClick = fn, order, column, width })
@@ -41,12 +42,34 @@ local function TextOf(v)
     return v or ""
 end
 
-local function Refresh()
-    for _, w in ipairs(widgets) do w.refresh() end
+local buttons = {} -- { b, def, col } for buttons and choices
+
+-- Buttons in one column share one width (the widest text), so they line up.
+local function SizeButtons()
+    local width = {}
+    for _, e in ipairs(buttons) do
+        local need = math.max(e.def.width or 190, e.b:GetTextWidth() + 28)
+        width[e.col] = math.max(width[e.col] or 0, need)
+    end
+    for _, e in ipairs(buttons) do e.b:SetWidth(width[e.col]) end
 end
 
-local function Build(panel)
+local function Refresh()
+    for _, w in ipairs(widgets) do w.refresh() end
+    SizeButtons()
+end
+
+local function Build(tab)
     table.sort(defs, function(a, b) return (a.order or 100) < (b.order or 100) end)
+
+    -- Everything sits on a scroll child, so a small window scrolls instead of the
+    -- last entries running into the border.
+    local scroll = CreateFrame("ScrollFrame", nil, tab, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, -4)
+    scroll:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -28, 8)
+    local panel = CreateFrame("Frame", nil, scroll)
+    panel:SetSize(math.max(scroll:GetWidth(), 400), 400)
+    scroll:SetScrollChild(panel)
 
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -10)
@@ -90,6 +113,7 @@ local function Build(panel)
             b:SetSize(def.width or 190, 22)
             b:SetPoint("TOPLEFT", col.anchor, "BOTTOMLEFT", 4, col.offset - 2)
             Next(col, b, -8)
+            buttons[#buttons + 1] = { b = b, def = def, col = col }
             if def.kind == "button" then
                 b:SetScript("OnClick", function() def.onClick() Refresh() end)
                 widgets[#widgets + 1] = { refresh = function()
@@ -124,6 +148,17 @@ local function Build(panel)
             end
             label:SetFontObject("GameFontHighlight")
             label:SetText(def.label)
+            -- The label is part of the button (hover and click), so a tooltip shows there too.
+            cb:SetHitRectInsets(0, -(label:GetStringWidth() + 6), 0, 0)
+            if def.tooltip then
+                cb:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetText(def.label, 1, 1, 1)
+                    GameTooltip:AddLine(TextOf(def.tooltip), 1, 0.82, 0, true)
+                    GameTooltip:Show()
+                end)
+                cb:SetScript("OnLeave", GameTooltip_Hide)
+            end
 
             local function Value()
                 if def.get then return def.get() and true or false end
@@ -156,14 +191,33 @@ local function Build(panel)
                 local anchor = CreateFrame("Frame", nil, panel)
                 anchor:SetSize(1, 1)
                 anchor:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", -30, 0)
-                Next(col, anchor, -8)
+                Next(col, anchor, -10)
             end
         end
     end
 
-    panel:SetScript("OnShow", Refresh)
-    ns:RegisterCallback("SETTINGS_REFRESH", function() if panel:IsVisible() then Refresh() end end)
-    Refresh()
+    -- Scroll height = from the top down to the lowest element of either column.
+    local function UpdateHeight()
+        local top = panel:GetTop()
+        local b1, b2 = cols[1].anchor:GetBottom(), cols[2].anchor:GetBottom()
+        if not (top and b1 and b2) then return end
+        local h = top - math.min(b1, b2) + 16
+        panel:SetHeight(h)
+        local bar = scroll.ScrollBar
+        if bar then bar:SetShown(h > scroll:GetHeight() + 1) end
+    end
+    local function RefreshAll()
+        Refresh()
+        C_Timer.After(0, UpdateHeight) -- after text wrapping has been laid out
+    end
+    scroll:SetScript("OnSizeChanged", function(_, width)
+        panel:SetWidth(width)
+        C_Timer.After(0, UpdateHeight)
+    end)
+
+    tab:SetScript("OnShow", RefreshAll)
+    ns:RegisterCallback("SETTINGS_REFRESH", function() if tab:IsVisible() then RefreshAll() end end)
+    RefreshAll()
 end
 
 ns.MainFrame:RegisterTab("settings", "Settings", 30, Build)

@@ -234,13 +234,23 @@ function Wishlist:Category(itemID)
     return (classID == weapon or classID == armor) and "gear" or "mats"
 end
 
+-- Is this player still in the guild? (Until the roster has loaded, assume yes.)
+-- Requests and claims of players who left or were kicked stay stored but are hidden
+-- everywhere (list, tooltips, popups), so nobody sends items to someone outside the
+-- guild. They come back if the player rejoins, and expire like any unseen request.
+function Wishlist:InGuild(name)
+    local Comm = ns.Comm
+    if not Comm or not Comm:RosterReady() then return true end
+    return name == ns:PlayerName() or Comm:IsMember(name)
+end
+
 -- Open requests, newest first. filter: "all" | "mats" | "gear" | "mine"
 function Wishlist:List(filter)
     local out = {}
     local store = Store()
     if not store then return out end
     for _, req in pairs(store) do
-        if self:IsOpen(req) then
+        if self:IsOpen(req) and self:InGuild(req.requester) then
             local keep = filter == nil or filter == "all"
                 or (filter == "mine" and self:IsMine(req))
                 or (filter ~= "mine" and self:CategoryOf(req) == filter)
@@ -537,7 +547,7 @@ function Wishlist:ClaimsFor(reqId)
     local claims = Claims()
     if not claims then return out end
     for _, c in pairs(claims) do
-        if c.reqId == reqId and self:IsClaimActive(c) then out[#out + 1] = c end
+        if c.reqId == reqId and self:IsClaimActive(c) and self:InGuild(c.claimer) then out[#out + 1] = c end
     end
     table.sort(out, function(a, b) return a.updated < b.updated end)
     return out
@@ -713,3 +723,8 @@ function Wishlist:PriceText(copper)
     if GetMoneyString then return GetMoneyString(copper, true) end
     return C_CurrencyInfo.GetCoinTextureString(copper)
 end
+
+-- Someone joined or left the guild: lists, tooltips and the badge re-check who's in.
+ns:RegisterCallback("ROSTER_CHANGED", function()
+    ns:Fire("WISHLIST_CHANGED", nil, "roster")
+end)

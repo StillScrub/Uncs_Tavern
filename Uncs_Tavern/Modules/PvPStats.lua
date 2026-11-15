@@ -220,6 +220,9 @@ end
 
 local function OnPartyKill(_, attackerGUID, targetGUID)
     if not (attackerGUID and targetGUID) then return end
+    -- Midnight hides some event values as "secret" (BugSack: comparing them is an error).
+    -- We can't read those, so that kill isn't counted here; the honor/stat signals still are.
+    if issecretvalue and (issecretvalue(attackerGUID) or issecretvalue(targetGUID)) then return end
     if attackerGUID ~= UnitGUID("player") and attackerGUID ~= UnitGUID("pet") then return end
     if not targetGUID:match("^Player%-") then return end
 

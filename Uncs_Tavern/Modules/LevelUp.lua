@@ -9,7 +9,6 @@
 local _, ns = ...
 
 local FORMAT  = "[Unc's Tavern] %s reached level %d!"
-local POPUP   = "UNCSTAVERN_LEVELUP"
 local MAX_LOG = 30
 
 local pending -- level waiting for combat to end before the popup is shown
@@ -45,24 +44,25 @@ ns:RegisterEvent("ADDON_ACTION_FORBIDDEN", OnBlocked)
 ---------------------------------------------------------------------------
 -- Popup
 ---------------------------------------------------------------------------
-StaticPopupDialogs[POPUP] = {
-    text = "|cffe6b422Unc's Tavern|r\n\nYou reached level %d!\nPost it to guild chat?",
-    button1 = "Post",
-    button2 = "Not now",
-    OnAccept = function(_, level)
-        if level and IsInGuild() then Send(Message(level), "GUILD") end
-    end,
-    timeout = 120,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
+-- Our own dialog (UI\Dialog.lua), not Blizzard's shared StaticPopup. Clicking Post is
+-- the player's click, so the guild message goes through. Several level-ups in a row:
+-- the newest replaces the old question.
+local function ShowPopup(level)
+    ns.Dialog:Show({
+        text = ("You reached level %d!\nPost it to guild chat?"):format(level),
+        accept = "Post",
+        cancel = "Not now",
+        timeout = 120,
+        onAccept = function()
+            if IsInGuild() then Send(Message(level), "GUILD") end
+        end,
+    })
+end
 
 local function Offer(level)
     if not IsInGuild() or not ns.db.settings.levelUpPosts then return end
     Log("offering post for level " .. level)
-    StaticPopup_Hide(POPUP) -- several level-ups in a row: only offer the newest
-    StaticPopup_Show(POPUP, level, nil, level)
+    ShowPopup(level)
 end
 
 local function OnRegenEnabled()
@@ -97,7 +97,7 @@ ns.Settings:RegisterToggle({
 --   /tavern levelup popup    show the popup now, to try it (Post really sends)
 ns:RegisterCommand("levelup", function(arg)
     if arg:lower() == "popup" then
-        StaticPopup_Show(POPUP, UnitLevel("player"), nil, UnitLevel("player"))
+        ShowPopup(UnitLevel("player"))
         return
     end
     local state = ns.db.settings.levelUpPosts and "ON" or "OFF"

@@ -46,8 +46,9 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 
 **Alerts**
 - Item tooltips show who in the guild wants an item ("Wanted by <name>: N more · price").
-- A popup at vendors, the auction house and the mailbox lists bag items that fill guildmates' requests; selling one warns you and points to the Buyback tab.
-- A red warning when a guildmate's mail asks more COD than your wishlist price for those items.
+- Once per login, a popup at vendors, the auction house or the mailbox lists bag items that fill guildmates' requests (**Ignore forever** turns it off). Selling one warns you and points to the Buyback tab.
+- Requests from players who left or were kicked from the guild disappear right away.
+- A red warning when a guildmate's mail asks more COD than your wishlist price for those items. *Disabled for now: COD mail fails on the WoW: Forever server ("Internal mail database error"), even without addons.*
 - A badge on the minimap button counts new requests until you open the Wishlist tab.
 
 **Level-up post**
@@ -107,7 +108,7 @@ Coming soon:
 - **Never shared:** your bags, gold, mail, other guilds' data, or which characters belong to you.
 - **Stays in the guild:** data is stored per guild. Leaving or changing guild stops syncing and hides the old data; **Delete this guild's data** in Settings removes it.
 - **Can't be faked by a modified copy:** only you can create, change or remove your requests and claims; PvP numbers are accepted only about the sender (and labelled self-reported); Helped counts only when the receiver's own addon confirms it. Received text is stripped of links, colors and textures, and item names are always built by your own game client.
-- **Your money and items:** the addon never sends or takes mail, pays COD, trades or sells anything. It can fill things in; you always press the game's own button. It warns you when a guildmate's COD is above your wishlist price.
+- **Your money and items:** the addon never sends or takes mail, pays COD, trades or sells anything. It can fill things in; you always press the game's own button. It can warn you when a guildmate's COD is above your wishlist price (disabled while COD is broken on the server).
 
 Found a security problem? Please report it privately; see [SECURITY.md](SECURITY.md).
 

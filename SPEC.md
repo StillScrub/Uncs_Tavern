@@ -54,14 +54,14 @@ A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but
 
 ## 4. Alerts
 - **Item tooltips:** extra lines on wanted items (item and rule requests) — "Wanted by <name>: N more · price"; your own requests show as "On your wishlist: N more". Up to 4 lines, then "+N more".
-- **Popup on opening a vendor, auction house or mailbox:** "N items in your bags are on the guild wishlist", listing up to 6 (item ×count -> requester · price), with Show me (opens the Wishlist tab) / Not now. Only guildmates' requests, only unbound items, capped at what's still unclaimed. Our own non-modal frame at the top of the screen; never blocks selling. Shows every time one of those windows opens.
+- **Popup on opening a vendor, auction house or mailbox:** "N items in your bags are on the guild wishlist", listing up to 6 (item ×count -> requester · price), with Show me (opens the Wishlist tab) / Ignore forever (turns the popup off; back on in Settings); the X just closes it. Only guildmates' requests, only unbound items, capped at what's still unclaimed. Our own non-modal frame at the top of the screen; never blocks selling. Shows **once per login**, the first time one of those windows opens with something to fill. The sell warning and the COD warning each have their own switch.
 - **Sell warning:** selling an item a guildmate asked for gives a red on-screen + chat message pointing to the vendor's Buyback tab. Detected afterwards from the buyback list; the sale is never stopped.
 - **Minimap button:** red badge with the number of guildmates' requests created since you last opened the Wishlist tab (per character).
 
 ## 5. Mailbox "Guild Requests" tab (planned)
 - New tab next to Inbox / Send Mail.
 - Lists only requests the player can fill from their bags.
-- Picking one shows a draft: recipient, subject ("Unc's Tavern: Item ×N"), items attached, COD pre-filled as quantity × requester's price (or Gift). Everything is editable.
+- Picking one shows a draft: recipient, subject ("Unc's Tavern: Item ×N"), items attached, COD pre-filled as quantity × requester's price (or Gift). Everything is editable. (COD mail currently fails on the Forever server, "Internal mail database error" even without addons; until that's fixed the panel should not pre-fill COD.)
 - "Fill Send Mail" fills the real Send Mail form. The player presses Send.
 
 ## 6. Level-up post
@@ -71,7 +71,9 @@ A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but
 - Only players with the addon post their own level-ups.
 
 ## 7. Settings tab
-- Left: level-up posts, tooltip lines, vendor/AH/mail popup (+ sell and COD warnings), minimap badge, minimap button.
+- Left: level-up posts, tooltip lines, vendor/AH/mail popup, sell warning, COD warning (greyed out with a hover note while COD is broken on the server), minimap badge, minimap button. Buttons in a column share one width. The tab scrolls when the window is small.
+- Requests and claims of players no longer in the guild (left or kicked) are hidden everywhere (lists, tooltips, popup) as soon as the roster shows it; they come back if the player rejoins.
+- Our dialogs (claim, got, delete, level-up) are our own frames, never Blizzard's shared StaticPopup, so the game's own popups (guild invite, send money) are untouched.
 - Right: sharing with this guild (see 8).
 
 ## 8. Security & sharing
@@ -79,7 +81,7 @@ Full rules: "Security rules (always apply)" in CLAUDE.md. In short:
 - **Opt-in per guild:** first login in a guild asks "Enable Unc's Tavern sharing for <guild>?". Until Enable, nothing is sent or accepted (the roster still works). Settings: master switch, Wishlist / PvP stats / Helped-History switches with what each shares, request expiry, **Delete this guild's data**.
 - **Trust:** the sender name (set by the server) is trusted; message content never is. Messages are accepted only on the GUILD channel, protocol 2, from members on our own cached roster (unknown sender: one roster refresh, then dropped), within a per-sender rate limit (burst 60, then 1/s). Every field is validated; text is stripped of escape codes; item names and links are always built locally from the item ID.
 - **Ownership:** requests only from their requester, claims only from their claimer, PvP stats only about the sender, Helped only from the receiver's confirmation. No relaying.
-- **Money and items:** the addon never sends mail, takes mail, pays COD, trades or sells. A guildmate's mail whose COD is above quantity x your wishlist price gets a red warning; Blizzard's COD confirmation is untouched.
+- **Money and items:** the addon never sends mail, takes mail, pays COD, trades or sells. A guildmate's mail whose COD is above quantity x your wishlist price gets a red warning (disabled while COD is broken on the Forever server); Blizzard's COD confirmation is untouched.
 - Saved data is validated on load. Data is stored per guild (name + realm); leaving or changing guild hides the old data and stops syncing.
 - `/tavern securitytest` (after `/tavern debug on`): feeds forged messages to the receive path in a sandbox, sends nothing, prints PASS/FAIL.
 

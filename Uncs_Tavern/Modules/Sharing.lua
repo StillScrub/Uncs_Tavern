@@ -119,19 +119,17 @@ local function DeleteGuildData()
         .. "Your other characters' History for this guild is kept until you delete it on them."):format(GuildName()))
 end
 
-StaticPopupDialogs["UNCSTAVERN_DELETE_GUILD_DATA"] = {
-    text = "|cffe6b422Unc's Tavern|r\n\nDelete everything saved for %s?\n"
-        .. "Wishlist requests (yours too), claims, PvP stats, Helped and this character's History.\n\n"
-        .. "This can't be undone. If sharing stays on, guildmates' data comes back as they log in.",
-    button1 = "Delete",
-    button2 = "Cancel",
-    OnAccept = DeleteGuildData,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    showAlert = true,
-    preferredIndex = 3,
-}
+-- Our own dialog (UI\Dialog.lua), not Blizzard's shared StaticPopup.
+local function ConfirmDelete()
+    ns.Dialog:Show({
+        text = ("|cffff4040Delete everything saved for %s?|r\n"
+            .. "Wishlist requests (yours too), claims, PvP stats, Helped and this character's History.\n\n"
+            .. "This can't be undone. If sharing stays on, guildmates' data comes back as they log in.")
+            :format(GuildName()),
+        accept = "Delete",
+        onAccept = DeleteGuildData,
+    })
+end
 
 ---------------------------------------------------------------------------
 -- Settings (right column)
@@ -189,7 +187,5 @@ ns.Settings:RegisterButton({
     column = 2, order = 7,
     label = "Delete this guild's data",
     disabled = function() return not ns:GuildKey() end,
-    onClick = function()
-        StaticPopup_Show("UNCSTAVERN_DELETE_GUILD_DATA", GuildName())
-    end,
+    onClick = ConfirmDelete,
 })
