@@ -1,4 +1,4 @@
--- UI\Dialog.lua: our own small question / number dialog (Claim, Got, Delete, Level-up).
+-- UI\Dialog.lua: our own small question / number dialog (Claim, Got, Delete, moderation).
 --
 -- Why not Blizzard's StaticPopup: its dialog frames and their edit box are shared with
 -- the game's own popups (guild invite, send money, ...), and anything an addon leaves

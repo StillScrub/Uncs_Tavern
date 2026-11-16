@@ -4,8 +4,9 @@
 --
 -- WoW: Forever blocks addons from sending guild chat on their own: a send that
 -- isn't triggered by a click or keypress is dropped with ADDON_ACTION_BLOCKED
--- (confirmed 2026-11-11). So on level-up we show a small popup and the player
--- clicks "Post"; that click is what lets the message through.
+-- (confirmed 2026-11-11), and even a click on a plain addon button is blocked
+-- (2026-11-15). So on level-up we show a small popup whose "Post" button is a secure
+-- macro button: the player's click runs "/g <line>" like their own macro.
 local _, ns = ...
 
 local FORMAT  = "[Unc's Tavern] %s reached level %d!"
@@ -26,15 +27,6 @@ local function Log(text)
     while #log > MAX_LOG do table.remove(log, 1) end
 end
 
--- Must be called from a click or keypress, or the game blocks it.
-local function Send(msg, chatType, target)
-    local fn = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
-    if not fn then return false, "no chat send function" end
-    local ok, err = pcall(fn, msg, chatType, nil, target)
-    Log(("send %s: %s"):format(chatType, ok and "ok" or ("ERROR " .. tostring(err))))
-    return ok, err
-end
-
 local function OnBlocked(event, addon, func)
     if addon == ns.name then Log(("%s: %s"):format(event, tostring(func))) end
 end
@@ -44,19 +36,97 @@ ns:RegisterEvent("ADDON_ACTION_FORBIDDEN", OnBlocked)
 ---------------------------------------------------------------------------
 -- Popup
 ---------------------------------------------------------------------------
--- Our own dialog (UI\Dialog.lua), not Blizzard's shared StaticPopup. Clicking Post is
--- the player's click, so the guild message goes through. Several level-ups in a row:
--- the newest replaces the old question.
+-- Forever blocks a guild chat send even from a click on a plain addon button
+-- (ADDON_ACTION_BLOCKED "UNKNOWN()", 2026-11-15); only Blizzard's StaticPopup click got
+-- through, and we don't use StaticPopup any more (UI\Dialog.lua says why). So "Post" is
+-- a SecureActionButton running the macro "/g <line>": the same as the player clicking
+-- their own macro. Its macro text is set only out of combat (the popup is only shown
+-- then). A frame holding a secure button can't be hidden in combat, so a close during
+-- combat waits for combat to end. Several level-ups in a row: the newest replaces the
+-- question. Not in UISpecialFrames (Escape would try to hide it in combat).
+local TIMEOUT = 120
+local WIDTH = 380
+local popup
+local token = 0
+
+local function HideNow()
+    ns:UnregisterEvent("PLAYER_REGEN_ENABLED", HideNow)
+    if popup then popup:Hide() end
+end
+
+local function ClosePopup()
+    if not popup or not popup:IsShown() then return end
+    if InCombatLockdown() then
+        ns:UnregisterEvent("PLAYER_REGEN_ENABLED", HideNow) -- never twice
+        ns:RegisterEvent("PLAYER_REGEN_ENABLED", HideNow)
+    else
+        popup:Hide()
+    end
+end
+
+local function CreatePopup()
+    popup = CreateFrame("Frame", "UncsTavernLevelUpPopup", UIParent, "BasicFrameTemplateWithInset")
+    popup:SetSize(WIDTH, 120)
+    popup:SetPoint("TOP", UIParent, "TOP", 0, -180)
+    popup:SetFrameStrata("DIALOG")
+    popup:SetToplevel(true)
+    popup:SetClampedToScreen(true)
+    popup:SetMovable(true)
+    popup:EnableMouse(true)
+    popup:RegisterForDrag("LeftButton")
+    popup:SetScript("OnDragStart", function(self) if not InCombatLockdown() then self:StartMoving() end end)
+    popup:SetScript("OnDragStop", popup.StopMovingOrSizing)
+    if popup.CloseButton then popup.CloseButton:Hide() end -- its HideUIPanel isn't combat-safe here
+
+    local title = popup.TitleText or popup:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    if not popup.TitleText then title:SetPoint("TOP", popup, "TOP", 0, -5) end
+    title:SetText(ns.title)
+
+    popup.text = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    popup.text:SetPoint("TOP", popup, "TOP", 0, -36)
+    popup.text:SetWidth(WIDTH - 40)
+    popup.text:SetJustifyH("CENTER")
+    popup.text:SetSpacing(2)
+
+    local post = CreateFrame("Button", "UncsTavernLevelUpPost", popup, "SecureActionButtonTemplate,UIPanelButtonTemplate")
+    post:SetSize(110, 22)
+    post:SetPoint("BOTTOMRIGHT", popup, "BOTTOM", -4, 12)
+    post:SetText("Post")
+    -- Secure buttons act on key-down or key-up depending on the ActionButtonUseKeyDown
+    -- setting; registering both lets whichever one the game wants through.
+    post:RegisterForClicks("LeftButtonUp", "LeftButtonDown")
+    post:SetAttribute("type", "macro")
+    post:SetScript("PostClick", function(_, _, down)
+        if down ~= GetCVarBool("ActionButtonUseKeyDown") then return end -- the half that didn't act
+        Log("post clicked")
+        popup.text:SetText("Posted to guild chat.")
+        ClosePopup()
+    end)
+    popup.post = post
+
+    local cancel = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
+    cancel:SetSize(110, 22)
+    cancel:SetPoint("BOTTOMLEFT", popup, "BOTTOM", 4, 12)
+    cancel:SetText("Not now")
+    cancel:SetScript("OnClick", ClosePopup)
+    popup:Hide()
+end
+
 local function ShowPopup(level)
-    ns.Dialog:Show({
-        text = ("You reached level %d!\nPost it to guild chat?"):format(level),
-        accept = "Post",
-        cancel = "Not now",
-        timeout = 120,
-        onAccept = function()
-            if IsInGuild() then Send(Message(level), "GUILD") end
-        end,
-    })
+    if InCombatLockdown() then return false end -- the macro text can't be set in combat
+    if not popup then CreatePopup() end
+    ns:UnregisterEvent("PLAYER_REGEN_ENABLED", HideNow)
+    popup.post:SetAttribute("macrotext", "/g " .. Message(level))
+    popup.text:SetText(("You reached level %d!\nPost it to guild chat?"):format(level))
+    popup:SetHeight(36 + popup.text:GetStringHeight() + 56)
+    popup:Show()
+    popup:Raise()
+    token = token + 1
+    local mine = token
+    C_Timer.After(TIMEOUT, function()
+        if token == mine then ClosePopup() end
+    end)
+    return true
 end
 
 local function Offer(level)
@@ -98,7 +168,7 @@ ns.Settings:RegisterToggle({
 --   /tavern levelup popup    show the popup now, to try it (Post really sends)
 ns:RegisterCommand("levelup", function(arg)
     if arg:lower() == "popup" then
-        ShowPopup(UnitLevel("player"))
+        if not ShowPopup(UnitLevel("player")) then ns:Print("Try again out of combat.") end
         return
     end
     local state = ns.db.settings.levelUpPosts and "ON" or "OFF"

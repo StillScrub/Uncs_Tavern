@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After using Claim or Got, the guild window's "Add member" box only accepted numbers, and other Blizzard popups could be blocked. The addon no longer uses Blizzard's shared popups at all; it has its own dialog.
 - Requests and claims of players who left or were kicked from the guild are hidden at once, so nobody mails items to them.
 - PvP: a Lua error on every party kill ("secret string value") on the Midnight client.
+- Level-up: clicking **Post** did nothing (the game blocked the send) after the switch to our own dialog. Post is now a secure button that runs `/g …` like your own macro.
 - History: long names in the From / To columns were cut off ("Fumble..."). The name and date columns now size themselves to the longest entry; the Item column takes the rest and grows when you widen the window.
 
 ## [0.3.0] - 2026-11-14
