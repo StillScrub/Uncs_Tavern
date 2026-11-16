@@ -1,5 +1,5 @@
 -- Modules\LevelUp.lua: offer to post the player's own level-ups to guild chat.
--- The Discord bot parses this line, so FORMAT must never change:
+-- Guilds' own Discord tools may parse this line, so FORMAT must never change:
 --   [Unc's Tavern] <Name> reached level <N>!
 --
 -- WoW: Forever blocks addons from sending guild chat on their own: a send that

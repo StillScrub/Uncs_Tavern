@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- All wording is guild-neutral: the README, the docs and the level-up setting's Discord note work for any guild (the note now only applies if your guild mirrors guild chat to Discord).
+- README shows real screenshots of every tab.
+
 ## [0.4.0] - 2026-11-17
 
 ### Security

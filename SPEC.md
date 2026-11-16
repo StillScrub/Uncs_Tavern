@@ -1,6 +1,6 @@
 # Unc's Tavern — spec
 
-A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but working for any guild: the guild is read at runtime, never hardcoded.
+A guild hub addon for any guild on World of Warcraft: Forever. The guild is read at runtime, never hardcoded, and no text, default or behavior is specific to one guild.
 
 ## 0. Where it lives: the guild window (J)
 - Pressing **J** opens Blizzard's normal Guild & Communities window, unchanged.
@@ -70,7 +70,7 @@ A guild hub addon for World of Warcraft: Forever, built for <Unc of Azeroth> but
 ## 6. Level-up post
 - On level-up (after combat), a popup offers to post to guild chat: `[Unc's Tavern] <Name> reached level <N>!` The player clicks **Post** — WoW: Forever only lets addons post to chat on a click.
 - On by default; can be turned off in Settings.
-- The guild's Discord side may parse this line, so keep the format exactly stable.
+- A guild's own Discord tools may parse this line, so keep the format exactly stable.
 - Only players with the addon post their own level-ups.
 
 ## 7. Settings tab
@@ -102,10 +102,10 @@ Lets trusted members pass on other players' requests, so you don't have to be on
 - **Safeguards:** relayed rows show "via <Keeper>" in grey until the owner's own message confirms them; the owner's own data always wins; an owner who sees a keeper pass on a changed version of their data gets a warning and an officer-log entry. Never relayed: Helped/History confirmations, moderator actions, rank permissions, bags, gold, mail, alts.
 - **Risk (shown in the warning):** a keeper running a modified copy could alter or invent requests and claims for players who opted in. It can't move gold or items (the player still presses Blizzard's buttons; the COD warning still applies).
 - **Later, maybe:** signed records (each player signs their own data; receivers keep the key first seen directly from that player), which would let receivers detect a keeper's changes. Needs public-key crypto in plain Lua, so it's a separate decision.
-- Not planned inside the addon: a website. Addons can't reach the internet; that would need a companion program on every PC (possible later alongside the Discord bot).
+- Not planned inside the addon: a website. Addons can't reach the internet; that would need a companion program on every PC (possible later as a separate companion project).
 
 ## Out of scope
 - Gear upgrade detection (dropped).
-- Info/events board, RSVPs, Notes tab and any Discord integration inside the addon (Discord is handled separately, outside the game).
+- Info/events board, RSVPs, Notes tab and any Discord integration inside the addon (guilds can handle Discord with their own tools, outside the game).
 - Officer actions (promote, demote, remove) and anything that drives Blizzard's guild window.
 - Announcing level-ups for members without the addon (maybe later).

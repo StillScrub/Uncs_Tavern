@@ -1,10 +1,11 @@
 # Unc's Tavern — project rules
 
-Guild addon for **<Unc of Azeroth>** (Alliance PvP guild) on **World of Warcraft: Forever**.
+Guild addon for **any guild** on **World of Warcraft: Forever**, published on GitHub and CurseForge.
 Read SPEC.md for features. This file is how to build them.
+- Keep everything guild-neutral: code, in-game text, defaults, README, SPEC, CHANGELOG and release notes never name a specific guild, realm, faction, Discord server or real player. The player's own guild name is read at runtime. ("Unc's Tavern" is the addon's name and stays.) Screenshots may show the author's guild.
 
 ## Folder layout
-- Project root (this folder, `<project root>`): docs, notes, git. Its parent folder may hold other Unc's Tavern projects (e.g. the Discord bot); don't touch them from here.
+- Project root (this folder, `<project root>`): docs, notes, git. Its parent folder may hold other, separate projects; don't touch them from here.
 - Addon code lives ONLY in the `Uncs_Tavern\` subfolder. Project docs stay at the root.
 - `<WoW folder>\_forever_\Interface\AddOns\Uncs_Tavern` is a junction pointing at `<project root>\Uncs_Tavern\`. Never edit through the AddOns path; edit here and the game sees it.
 - The addon folder name and .toc name must match: `Uncs_Tavern\Uncs_Tavern.toc`.

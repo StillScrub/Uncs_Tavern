@@ -1,6 +1,6 @@
 # Unc's Tavern
 
-A guild hub addon for **&lt;Unc of Azeroth&gt;** on World of Warcraft: Forever. It adds a toggleable Unc's Tavern view to the Guild & Communities window (J).
+A guild hub addon for any guild on World of Warcraft: Forever. It adds a toggleable Unc's Tavern view to the Guild & Communities window (J): your guild's roster with PvP stats, a shared wishlist, delivery history and moderation tools. Your guild is detected in game, and everything is shared only with your own guildmates who run the addon.
 
 [![Latest release](https://img.shields.io/github/v/release/StillScrub/Uncs_Tavern?label=release)](https://github.com/StillScrub/Uncs_Tavern/releases/latest)
 [![Game version](https://img.shields.io/badge/WoW-Forever%20(16001)-c69b3a)](#installation)
@@ -57,7 +57,7 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 
 **Level-up post**
 - On level-up, a popup offers to post `[Unc's Tavern] <Name> reached level <N>!` to guild chat with one click. (WoW: Forever only lets addons post to chat when you click.)
-- Link your Battle.net account to Discord so your posts reach the guild Discord.
+- If your guild mirrors guild chat to Discord, the post reaches it like any guild message (Blizzard's bridge only carries players whose Battle.net account is linked to Discord). The line format never changes, so a guild's own Discord bot can read it.
 
 **Minimap button & Settings**
 - Minimap button: left-click opens or closes Unc's Tavern (swapping with the guild window if it's open), right-click opens its Settings; drag to move.
