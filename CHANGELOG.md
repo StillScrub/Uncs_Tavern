@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-17
+
 ### Changed
 - All wording is guild-neutral: the README, the docs and the level-up setting's Discord note work for any guild (the note now only applies if your guild mirrors guild chat to Discord).
 - README shows real screenshots of every tab.
@@ -105,7 +107,8 @@ First release.
 - Wishlist uses drag only: shift-click opened the bag's split-stack box, which grabbed keyboard input.
 - Level-up posts now go through: WoW: Forever blocks addon chat that isn't triggered by a click.
 
-[Unreleased]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.1.0...v0.2.0
