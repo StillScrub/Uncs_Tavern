@@ -94,6 +94,16 @@ Full rules: "Security rules (always apply)" in CLAUDE.md. In short:
 - **Moderators** (ranks allowed to moderate) right-click a Wishlist row: **Remove <name>'s request** / **Clear <name>'s claim (N)**, each asking first with an optional reason (60 characters, officer log only). Messages `MD` / `MC` on GUILD; every client checks the moderator's rank from its own roster before applying. The owner's (or claimer's) own client then marks it removed and announces that like any own edit. Moderators re-announce their own actions for 14 days when a guildmate logs in. Every action shows in the Guild log.
 - `/tavern probe`: what this client supports (rank list, context menu, OFFICER addon channel).
 
+## 10. Ledger keepers (planned)
+Lets trusted members pass on other players' requests, so you don't have to be online at the same time as the owner. Everything is off by default and opt-in at both ends, behind a red "use at your own risk" warning that has to be ticked by hand.
+- **Leader:** on the Permissions page, a **Keep the ledger** box per rank (same leader-only, rank-0-checked config as the other permissions).
+- **Owner:** "Let ledger keepers pass on my requests and claims." Consent travels on the owner's own messages; keepers store and pass on only consenting owners' data, received directly from them.
+- **Receiver:** "Accept requests passed on by ledger keepers." Off: relayed data is ignored as today.
+- **Safeguards:** relayed rows show "via <Keeper>" in grey until the owner's own message confirms them; the owner's own data always wins; an owner who sees a keeper pass on a changed version of their data gets a warning and an officer-log entry. Never relayed: Helped/History confirmations, moderator actions, rank permissions, bags, gold, mail, alts.
+- **Risk (shown in the warning):** a keeper running a modified copy could alter or invent requests and claims for players who opted in. It can't move gold or items (the player still presses Blizzard's buttons; the COD warning still applies).
+- **Later, maybe:** signed records (each player signs their own data; receivers keep the key first seen directly from that player), which would let receivers detect a keeper's changes. Needs public-key crypto in plain Lua, so it's a separate decision.
+- Not planned inside the addon: a website. Addons can't reach the internet; that would need a companion program on every PC (possible later alongside the Discord bot).
+
 ## Out of scope
 - Gear upgrade detection (dropped).
 - Info/events board, RSVPs, Notes tab and any Discord integration inside the addon (Discord is handled separately, outside the game).

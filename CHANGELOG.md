@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-17
+
 ### Security
 - **Opt-in sharing per guild:** the first login in each guild asks "Enable Unc's Tavern sharing for <guild>?". Until you click Enable, nothing is sent or accepted. Settings has separate switches for Wishlist, PvP stats and Helped/History, a list of exactly what each shares, how long others' requests are kept (7/14/30/60 days unseen) and **Delete this guild's data**.
 - **No relaying:** players only send their own requests and claims; a request is accepted only from its requester and a claim only from its claimer. Owners re-announce their requests when they or a guildmate log in. Other players' requests expire after 14 days without hearing from them.
@@ -99,7 +101,8 @@ First release.
 - Wishlist uses drag only: shift-click opened the bag's split-stack box, which grabbed keyboard input.
 - Level-up posts now go through: WoW: Forever blocks addon chat that isn't triggered by a click.
 
-[Unreleased]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/StillScrub/Uncs_Tavern/releases/tag/v0.1.0

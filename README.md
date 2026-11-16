@@ -104,6 +104,9 @@ The minimap button works like `/tavern` (right-click opens the Settings tab).
 Coming soon:
 - **Mailbox "Guild Requests" panel:** pick a request and get a ready-to-send mail draft (recipient, items, COD). You press Send.
 
+Later:
+- **Ledger keepers (opt-in, off by default):** the guild leader can let trusted ranks pass on other players' requests and claims, so you see a request even if you're never online at the same time as its owner. Owners and receivers each have to switch it on themselves, behind a "use at your own risk" warning; passed-on rows are labelled "via <Keeper>" until the owner confirms them.
+
 ## Privacy & Safety
 
 - **Opt-in:** the first time you log in with a guild, the addon asks whether to share with that guild. Until you click Enable it sends nothing and accepts nothing. You can switch sharing, or each part of it, off any time in Settings.
