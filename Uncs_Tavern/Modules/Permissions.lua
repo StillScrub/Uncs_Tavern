@@ -325,6 +325,12 @@ ns:RegisterCommand("probe", function()
         tostring(Perms:ICan("log"))))
     local _, state = Perms:Config()
     Line("permissions in force: " .. state)
+    -- Why "stale": the leader's saved rank checksum vs. ours, and how old our copy is.
+    local s = Stored()
+    Line(("  saved checksum: %s | ours now: %s | saved %s min ago | configs rejected: %d | sharing: %s"):format(
+        s and tostring(s.ranks) or "-", tostring(Perms:RankHash()),
+        s and s.t and tostring(math.floor(math.max(0, Now() - s.t) / 60)) or "-", Perms.rejected or 0,
+        Comm:IsSharing() and "on" or "off"))
     Line("MenuUtil.CreateContextMenu: " .. Has(MenuUtil and MenuUtil.CreateContextMenu))
     Line("C_GuildInfo.GuildControlGetRankFlags: " .. Has(C_GuildInfo and C_GuildInfo.GuildControlGetRankFlags))
     local ok, err = Comm:ProbeSend("OFFICER")
