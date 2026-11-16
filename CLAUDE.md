@@ -4,9 +4,9 @@ Guild addon for **<Unc of Azeroth>** (Alliance PvP guild) on **World of Warcraft
 Read SPEC.md for features. This file is how to build them.
 
 ## Folder layout
-- Project root (this folder): `D:\Claude AI\App\Projects\Uncs_Tavern\Addon` — docs, notes, git. The parent `Uncs_Tavern\` folder holds other Unc's Tavern projects (e.g. the Discord bot); don't touch them from here.
+- Project root (this folder, `<project root>`): docs, notes, git. Its parent folder may hold other Unc's Tavern projects (e.g. the Discord bot); don't touch them from here.
 - Addon code lives ONLY in the `Uncs_Tavern\` subfolder. Project docs stay at the root.
-- `C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns\Uncs_Tavern` is a junction pointing at `Uncs_Tavern\`. Never edit through the AddOns path; edit here and the game sees it.
+- `<WoW folder>\_forever_\Interface\AddOns\Uncs_Tavern` is a junction pointing at `<project root>\Uncs_Tavern\`. Never edit through the AddOns path; edit here and the game sees it.
 - The addon folder name and .toc name must match: `Uncs_Tavern\Uncs_Tavern.toc`.
 
 ## Platform facts

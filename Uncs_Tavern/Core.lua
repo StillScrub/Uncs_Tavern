@@ -26,7 +26,7 @@ function ns:Print(...)
 end
 
 ---------------------------------------------------------------------------
--- Player name. Forever characters have two names ("Hexual Defect"):
+-- Player name. Forever characters have two names ("First Second"):
 -- UnitName returns them as two values, GetUnitName(unit, true) joins them
 -- with a space, and the guild roster uses the joined form.
 ---------------------------------------------------------------------------

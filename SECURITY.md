@@ -13,6 +13,8 @@ before publishing details.
 
 Examples of what counts as a security problem:
 - forging or changing another player's wishlist request, claim, Helped count or PvP stats;
+- acting as a moderator or guild leader without that rank, or reading the officer log
+  without a rank allowed to see it;
 - getting links, textures, colors or formatting from a message shown in someone's UI;
 - crashing, freezing or flooding other players' clients with addon messages;
 - data reaching players outside the guild, or anything moving gold or items without the
@@ -35,7 +37,13 @@ the addon, over the guild addon channel, and only the parts switched on in Setti
 | PvP stats | your honorable kills, deaths to players, dishonorable kills and deaths, killing blows, "Most killed by" (self-reported) |
 | Helped / History | who delivered items to you (the receiver's confirmation that counts toward their Helped) |
 
-Also sent: a short hello with the addon version, so guildmates know who runs it.
+Also sent: a short hello with the addon version, so guildmates know who runs it. Depending
+on your rank:
+
+| Who | What is sent |
+|---|---|
+| Guild leader | the rank permissions (which ranks may moderate and see the officer log, how long logs are kept) |
+| Moderators | each remove/clear action on the guild channel (who, which request or claim). The optional reason goes only to the officer log: over the officer channel, and by whisper to online members whose rank may see it |
 
 ## What the addon never does
 
@@ -49,10 +57,15 @@ Also sent: a short hello with the addon version, so guildmates know who runs it.
 ## How messages are checked
 
 - The sender name is set by the game server and trusted; message content never is.
-- Accepted only on the guild channel, in the current message format, from players on the
-  receiver's own copy of the guild roster, within a per-sender rate limit.
+- Accepted only in the current message format, from players on the receiver's own copy of
+  the guild roster, within a per-sender rate limit. Normal data only on the guild channel;
+  officer data only on the officer channel or by whisper, never on the guild channel.
 - A request is accepted only from its requester, a claim only from its claimer, PvP stats
   only about the sender. Nobody relays other players' data.
+- Ranks always come from the receiver's own roster, never from a message: rank permissions
+  are accepted only from the guild leader (rank 0), moderator actions only from a rank the
+  leader allowed, and officer data is kept only by ranks allowed to see it. If the guild's
+  ranks change, everything falls back to "guild leader only" until the leader confirms.
 - Every field is range-checked. Received text has all escape codes removed. Item names and
   links are always built by the receiver's own client from the item ID.
 - Saved data is checked the same way when the addon loads.

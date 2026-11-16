@@ -3,7 +3,7 @@
 --
 -- Stored per guild in ns.db.wishlist[guildKey].requests[id]:
 --   id        "<requester>:<created>:<rand>"  (unique across the guild)
---   requester full two-part name, e.g. "Hexual Defect"
+--   requester full two-part name, e.g. "First Second"
 --   class     class file name of the requester (for coloring), e.g. "SHAMAN"
 --   itemID    number (item requests), or nil for a rule request
 --   rule      rule requests only: { armor, slot, minLevel, stat, minStat }

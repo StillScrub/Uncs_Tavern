@@ -4,3 +4,8 @@ Thumbs.db
 .DS_Store
 .idea/
 WTF/
+
+# Local work, never published
+Claude outputs/
+notes/*
+!notes/README.md
