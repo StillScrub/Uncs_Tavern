@@ -4,7 +4,7 @@ A guild hub addon for any guild on World of Warcraft: Forever. It adds a togglea
 
 [![Latest release](https://img.shields.io/github/v/release/StillScrub/Uncs_Tavern?label=release)](https://github.com/StillScrub/Uncs_Tavern/releases/latest)
 [![Game version](https://img.shields.io/badge/WoW-Forever%20(16001)-c69b3a)](#installation)
-[![License: MIT](https://img.shields.io/github/license/StillScrub/Uncs_Tavern)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 ### [⬇ Download latest release](https://github.com/StillScrub/Uncs_Tavern/releases/latest)
 
@@ -134,3 +134,5 @@ Found a security problem? Please report it privately; see [SECURITY.md](SECURITY
 ## License
 
 [MIT](LICENSE) © StillScrub
+
+**Forks:** you're welcome to build on this. If you publish a modified version, please give it a different name and icon, so players don't mistake it for the original (it couldn't sync safely with it either).
