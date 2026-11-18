@@ -7,9 +7,9 @@
 -- is visible; otherwise it just marks itself dirty and rebuilds on next show.
 --
 -- Optional providers other modules can set later (no edits needed here):
---   ns.PvPStats:Get(fullName) -> kills, deaths, dishonorableKills   (nil = member has no data)
+--   ns.PvPStats:Get(fullName) -> kills, deaths, dishonorableKills, duelsWon, duelsLost (nil = no data)
 --   ns.PvPStats:AddTooltip(tooltip, fullName)     extra row-tooltip lines
---   ns.History:HelpedCount(fullName) -> n          wishlist deliveries (nil = no data)
+--   ns.History:HelpedCount(fullName) -> n          wishlist deliveries (nil = no data; shown on hover)
 --   ns.Comm:CountAddonUsers() -> number
 local _, ns = ...
 
@@ -19,20 +19,28 @@ local DASH       = "—"
 local THROTTLE   = 2 -- seconds between roster rebuilds
 
 local COLUMNS = {
-    { key = "name",   label = "Name",          width = 165 },
+    { key = "name",   label = "Name",          width = 160 },
     { key = "level",  label = "Level",         width = 40,  justify = "CENTER" },
     { key = "zone",   label = "Zone / Status", width = 115, flex = 3 },
     { key = "rank",   label = "Rank",          width = 85,  flex = 2 },
-    { key = "kills",  label = "Kills",         width = 52,  justify = "CENTER",
-      tip = "Honorable kills, lifetime (includes assists). PvP numbers are self-reported by each player's addon." },
-    { key = "deaths", label = "Deaths",        width = 52,  justify = "CENTER",
-      tip = "Deaths to players. Lifetime when the game tracks it; otherwise deaths tracked since installing Unc's Tavern." },
-    { key = "kd",     label = "K/D",           width = 48,  justify = "CENTER",
+    { key = "kills",  label = "Kills",         width = 50,  justify = "CENTER", group = "world",
+      tip = "Honorable kills in the open world, lifetime (includes assists). Battleground kills are not counted; hover a member to see them. Members on an Unc's Tavern version older than 0.4.2 show all their honorable kills. PvP numbers are self-reported by each player's addon." },
+    { key = "deaths", label = "Deaths",        width = 50,  justify = "CENTER", group = "world",
+      tip = "Deaths to players. Lifetime when the game tracks it; otherwise deaths tracked since installing Unc's Tavern. Includes battleground deaths (the game has no open-world-only count)." },
+    { key = "kd",     label = "K/D",           width = 46,  justify = "CENTER", group = "world",
       tip = "Kills / Deaths (deaths count as at least 1)." },
-    { key = "dk",     label = "Dishonorable",  width = 78,  justify = "CENTER",
+    { key = "dk",     label = "Dishon.",       width = 54,  justify = "CENTER", group = "world",
+      tipTitle = "Dishonorable kills",
       tip = "Killing blows on players too low level to give honor, since installing Unc's Tavern. Not part of K/D." },
-    { key = "helped", label = "Helped",        width = 52,  justify = "CENTER",
-      tip = "Wishlist requests they delivered, as confirmed by the requester's own client when taking the items from the mailbox (at most 3 per guildmate per day)." },
+    { key = "duelsWon",  label = "Won",        width = 44,  justify = "CENTER", group = "duels",
+      tipTitle = "Duels won", tip = "Duels won, lifetime." },
+    { key = "duelsLost", label = "Lost",       width = 44,  justify = "CENTER", group = "duels",
+      tipTitle = "Duels lost", tip = "Duels lost, lifetime." },
+}
+-- Labels drawn above a run of columns (a second header row).
+local GROUPS = {
+    { key = "world", label = "Open World PvP" },
+    { key = "duels", label = "Duels" },
 }
 -- Zone and Rank grow with the window; the rest stay sized to their content.
 ns.Columns.Layout(COLUMNS, 0)
@@ -119,7 +127,7 @@ local function ReadRoster()
             end
             if ns.History then m.helped = ns.History:HelpedCount(full) end
             if pvp and pvp.Get then
-                m.kills, m.deaths, m.dk = pvp:Get(full)
+                m.kills, m.deaths, m.dk, m.duelsWon, m.duelsLost = pvp:Get(full)
                 if m.kills and m.deaths then
                     m.kd = m.kills / math.max(m.deaths, 1)
                 end
@@ -139,7 +147,8 @@ local SORTERS = {
     deaths = function(m) return m.deaths end,
     kd     = function(m) return m.kd end,
     dk     = function(m) return m.dk end,
-    helped = function(m) return m.helped end,
+    duelsWon  = function(m) return m.duelsWon end,
+    duelsLost = function(m) return m.duelsLost end,
 }
 
 local function Sorted(list)
@@ -172,6 +181,10 @@ local function RowOnEnter(row)
         GameTooltip:AddLine(m.note, 0.8, 0.8, 0.8, true)
     else
         GameTooltip:AddLine("No public note", 0.5, 0.5, 0.5)
+    end
+    if m.helped then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddDoubleLine("Helped", ("%d wishlist deliveries"):format(m.helped), 1, 0.82, 0, 1, 1, 1)
     end
     if ns.PvPStats and ns.PvPStats.AddTooltip then ns.PvPStats:AddTooltip(GameTooltip, m.full) end
     GameTooltip:Show()
@@ -224,7 +237,8 @@ local function InitRow(row, m)
     cells[6]:SetText(m.deaths or DASH)
     cells[7]:SetText(m.kd and ("%.2f"):format(m.kd) or DASH)
     cells[8]:SetText(m.dk or DASH)
-    cells[9]:SetText(m.helped or DASH)
+    cells[9]:SetText(m.duelsWon or DASH)
+    cells[10]:SetText(m.duelsLost or DASH)
 
     local grey = not m.online
     for i = 2, #cells do
@@ -339,7 +353,7 @@ local function Build(p)
 
     -- List area
     scrollBox = CreateFrame("Frame", nil, panel, "WowScrollBoxList")
-    scrollBox:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -54)
+    scrollBox:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -68) -- room for two header rows
     scrollBox:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -22, 22)
 
     local scrollBar = CreateFrame("EventFrame", nil, panel, "MinimalScrollBar")
@@ -372,7 +386,7 @@ local function Build(p)
         if col.tip then
             h:SetScript("OnEnter", function(self)
                 GameTooltip:SetOwner(self, "ANCHOR_TOP")
-                GameTooltip:AddLine(col.label)
+                GameTooltip:AddLine(col.tipTitle or col.label)
                 GameTooltip:AddLine(col.tip, 1, 1, 1, true)
                 GameTooltip:Show()
             end)
@@ -389,6 +403,18 @@ local function Build(p)
             Refresh()
         end)
         headers[#headers + 1] = h
+    end
+
+    -- Group labels above their columns, with a thin line underneath.
+    local groupLabels = {}
+    for _, g in ipairs(GROUPS) do
+        local fs = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        fs:SetJustifyH("CENTER")
+        fs:SetText(g.label)
+        local line = panel:CreateTexture(nil, "ARTWORK")
+        line:SetColorTexture(1, 0.82, 0, 0.35)
+        line:SetHeight(1)
+        groupLabels[#groupLabels + 1] = { key = g.key, fs = fs, line = line }
     end
 
     local divider = panel:CreateTexture(nil, "ARTWORK")
@@ -445,6 +471,21 @@ local function Build(p)
             h:ClearAllPoints()
             h:SetWidth(h.col.w)
             h:SetPoint("BOTTOMLEFT", scrollBox, "TOPLEFT", h.col.x, 4)
+        end
+        for _, g in ipairs(groupLabels) do
+            local x0, x1
+            for _, col in ipairs(COLUMNS) do
+                if col.group == g.key then
+                    x0 = math.min(x0 or col.x, col.x)
+                    x1 = math.max(x1 or 0, col.x + col.w)
+                end
+            end
+            g.fs:ClearAllPoints()
+            g.fs:SetPoint("BOTTOMLEFT", scrollBox, "TOPLEFT", x0, 27)
+            g.fs:SetWidth(x1 - x0)
+            g.line:ClearAllPoints()
+            g.line:SetPoint("BOTTOMLEFT", scrollBox, "TOPLEFT", x0 + 6, 24)
+            g.line:SetPoint("BOTTOMRIGHT", scrollBox, "TOPLEFT", x1 - 6, 24)
         end
     end
     ns.Columns.Watch(scrollBox, COLUMNS, function()

@@ -27,8 +27,11 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 - Click a column header to sort, search by name, and toggle "Show offline" (remembered per character).
 - Hover a member to see their level, class, rank and public note.
 - Footer: "X of Y online · Z using Unc's Tavern".
-- **PvP stats** (self-reported) for members running the addon: Kills (lifetime honorable kills), Deaths (deaths to players), K/D, and Dishonorable kills (players too low level to give honor; not part of K/D). Hover a member for killing blows, dishonorable deaths and who has killed them most.
-- **Helped:** how many times each member has delivered wishlist items to a guildmate, as confirmed by the person who received them.
+- **PvP stats** (self-reported) for members running the addon, under two headings:
+  - **Open World PvP:** Kills (lifetime honorable kills outside battlegrounds), Deaths (deaths to players), K/D, and Dishon. (dishonorable kills: players too low level to give honor; not part of K/D).
+  - **Duels:** Won and Lost, each sortable.
+  - Hover a member for battleground kills, killing blows, dishonorable deaths and who has killed them most.
+- **Helped** (on hover): how many times a member has delivered wishlist items to a guildmate, as confirmed by the person who received them.
 - **Sync** button to ask everyone running the addon to check in again.
 
 **Wishlist tab**
@@ -105,10 +108,11 @@ To update, delete the old `Uncs_Tavern` folder and extract the new zip the same 
 | `/tavern levelup` | Preview your level-up line (sends nothing) |
 | `/tavern levelup popup` | Show the level-up popup now |
 | `/tavern pvpdebug` | Print your PvP numbers, where they come from, and the last kill/death signal |
+| `/tavern pvpstatprobe` | Developer check: list the game's PvP-related statistics (reads only) |
 | `/tavern debug on` / `off` | Developer options |
 | `/tavern securitytest` | Developer check: feeds forged messages to the addon in a sandbox and prints which were rejected (sends nothing; needs debug on) |
 
-The minimap button works like `/tavern` (right-click opens the Settings tab).
+The minimap button works like `/tavern` (right-click opens the Settings tab). You can also bind a key to open and close it: **Options > Keybindings > AddOns > Unc's Tavern** (no key is set by default).
 
 ## Roadmap
 

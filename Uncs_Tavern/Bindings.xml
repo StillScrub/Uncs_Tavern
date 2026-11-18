@@ -1,0 +1,11 @@
+<!--
+  Bindings.xml: loaded by the game automatically (not listed in the .toc).
+  Adds "Open / close Unc's Tavern" to Options > Keybindings > AddOns. No key is
+  bound by default; players pick their own (e.g. Shift-J).
+  It does exactly what /tavern does (MainFrame:Toggle), which also works in combat.
+-->
+<Bindings>
+    <Binding name="UNCSTAVERN_TOGGLE" header="UNCSTAVERN" category="ADDONS">
+        SlashCmdList.UNCSTAVERN("")
+    </Binding>
+</Bindings>

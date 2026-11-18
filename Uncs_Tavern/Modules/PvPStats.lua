@@ -3,6 +3,10 @@
 -- KILLS
 --   Honorable kills (lifetime, includes assists): the higher of GetPVPLifetimeStats()
 --   and statistic 588, read on login and on PLAYER_PVP_KILLS_CHANGED.
+--   The Kills column shows world honorable kills only (statistic 381; battleground
+--   kills are statistic 382, shown on hover).
+--
+-- DUELS: won / lost, lifetime statistics 319 / 320, re-read after DUEL_FINISHED.
 --   Killing blows on players (since install): PARTY_KILL where the killer is me or my
 --   pet and the victim's GUID is a player.
 --   Dishonorable kills (since install): a killing blow on a player with no honor signal
@@ -17,13 +21,15 @@
 --   Shown value: statistic 1501 ("deaths from other players", lifetime) when the game
 --   fills it, otherwise our own count since install.
 --   Dishonorable deaths (since install): a PvP death where my level was grey to the
---   killer (so they got no honor). The recap has no levels, so at PLAYER_DEAD we note the
---   levels of nearby enemy players we can see (target, focus, mouseover, nameplates) and
---   match the killer's GUID; if the killer's level is unknown, it isn't counted.
+--   killer (so they got no honor). The recap has no levels, so we remember the levels of
+--   enemy players seen in the last LEVEL_MEMORY seconds (target, focus, mouseover,
+--   nameplates; a skull counts as 10+ levels above me) and match the killer's GUID; if
+--   the killer wasn't seen in that time, it isn't counted.
 --   Per-killer counts feed "Most killed by".
 --
 -- SHARING (UNCST, throttled through Comm's queue):
 --   2|P|<hk>|<deaths>|<deathsLifetime 1/0>|<dishonorableKills>|<killingBlows>|<topKiller>|<topCount>|<dishonorableDeaths>
+--      |<worldHK>|<battlegroundHK>|<duelsWon>|<duelsLost>   (added in 0.4.2)
 --   (fields are only ever appended; older clients ignore extra ones)
 --   Sent ~15 s after login, at most once a minute after changes, and shortly after a
 --   Sync or when a new addon user shows up. Only when PvP sharing is on.
@@ -40,6 +46,8 @@ local PvP = {}
 ns.PvPStats = PvP
 
 local STAT_HK, STAT_PVP_DEATHS = 588, 1501
+local STAT_WORLD_HK, STAT_BG_HK = 381, 382          -- honorable kills split by place (lifetime)
+local STAT_DUELS_WON, STAT_DUELS_LOST = 319, 320
 local HONOR_WINDOW   = 1.5     -- seconds between a killing blow and its honor signal
 local CONFIRM_DELAY  = 4       -- seconds after PLAYER_DEAD to confirm a real death
 local DUEL_WINDOW    = 6       -- seconds around a duel's end in which deaths are ignored
@@ -97,6 +105,23 @@ function PvP:HonorableKills()
     return math.max(LifetimeAPI() or 0, StatNumber(STAT_HK) or 0)
 end
 
+-- Honorable kills outside battlegrounds: statistic 381, or total minus statistic 382
+-- if the game has no 381.
+function PvP:WorldKills()
+    local world = StatNumber(STAT_WORLD_HK)
+    if world then return world end
+    return math.max(0, self:HonorableKills() - (StatNumber(STAT_BG_HK) or 0))
+end
+
+function PvP:BattlegroundKills()
+    return StatNumber(STAT_BG_HK) or 0
+end
+
+-- Returns duels won, duels lost (lifetime statistics).
+function PvP:Duels()
+    return StatNumber(STAT_DUELS_WON) or 0, StatNumber(STAT_DUELS_LOST) or 0
+end
+
 -- Returns deaths, isLifetime.
 function PvP:Deaths()
     local tracked = Mine().deaths or 0
@@ -121,9 +146,11 @@ local function OwnRecord()
     local p = Mine()
     local deaths, lifetime = PvP:Deaths()
     local top, topN = PvP:TopKiller()
+    local dw, dl = PvP:Duels()
     return { hk = PvP:HonorableKills(), deaths = deaths, lifetime = lifetime,
              dk = p.dishonorableKills or 0, kb = p.killingBlows or 0, dd = p.dishonorableDeaths or 0,
-             top = top, topN = topN, t = time() }
+             top = top, topN = topN, whk = PvP:WorldKills(), bghk = PvP:BattlegroundKills(),
+             dw = dw, dl = dl, t = time() }
 end
 
 -- Also keep my numbers in the account-wide store, so my other characters on this
@@ -138,7 +165,8 @@ local function ShareNow()
     if not (IsInGuild() and ns.Comm and ns.Comm:IsSharing("pvp")) then return end
     local r = OwnRecord()
     SaveOwn()
-    ns.Comm:Send("P", r.hk, r.deaths, r.lifetime and 1 or 0, r.dk, r.kb, r.top or "", r.topN or 0, r.dd)
+    ns.Comm:Send("P", r.hk, r.deaths, r.lifetime and 1 or 0, r.dk, r.kb, r.top or "", r.topN or 0, r.dd,
+        r.whk, r.bghk, r.dw, r.dl)
 end
 
 local function ScheduleShare(delay)
@@ -154,11 +182,12 @@ local function Changed()
 end
 
 if ns.Comm then
-    ns.Comm:RegisterHandler("P", function(sender, hk, deaths, lifetime, dk, kb, top, topN, dd)
+    ns.Comm:RegisterHandler("P", function(sender, hk, deaths, lifetime, dk, kb, top, topN, dd, whk, bghk, dw, dl)
         local store = GuildStore()
         if not store then return end
         local rec = PvP:CleanRecord({ hk = hk, deaths = deaths, lifetime = lifetime == "1", dk = dk, kb = kb,
-                                      dd = dd, top = top, topN = topN, t = time() })
+                                      dd = dd, top = top, topN = topN, whk = whk, bghk = bghk,
+                                      dw = dw, dl = dl, t = time() })
         if not rec then return end
         store[sender] = rec
         ns:Fire("PVP_STATS_CHANGED")
@@ -274,20 +303,43 @@ end
 
 local PLAYER_CONTROLLED = 0x100 -- COMBATLOG_OBJECT_CONTROL_PLAYER
 
--- Levels of enemy players visible at the moment of death: [guid] = level (-1 = skull).
-local seenLevels = {}
-local function SnapshotLevels()
-    wipe(seenLevels)
-    local function Note(unit)
-        if UnitExists(unit) and UnitIsPlayer(unit) and UnitCanAttack("player", unit) then
-            local guid = UnitGUID(unit)
-            if guid then seenLevels[guid] = UnitLevel(unit) end
+-- Levels of enemy players seen recently: [guid] = { level (-1 = skull), when (GetTime) }.
+-- Filled whenever an enemy player is targeted, focused, moused over or gets a nameplate,
+-- so a killer seen shortly before the death still counts after they've left the screen.
+-- Entries older than LEVEL_MEMORY seconds are dropped; the table is capped at LEVEL_CAP.
+local LEVEL_MEMORY, LEVEL_CAP = 300, 200
+local seenLevels, seenCount = {}, 0
+
+local function PruneLevels(now)
+    for guid, e in pairs(seenLevels) do
+        if now - e.t > LEVEL_MEMORY then
+            seenLevels[guid] = nil
+            seenCount = seenCount - 1
         end
     end
-    Note("target"); Note("focus"); Note("mouseover")
+end
+
+local function NoteLevel(unit)
+    if not (unit and UnitExists(unit) and UnitIsPlayer(unit) and UnitCanAttack("player", unit)) then return end
+    local guid = UnitGUID(unit)
+    if not guid then return end
+    local now = GetTime()
+    local e = seenLevels[guid]
+    if not e then
+        if seenCount >= LEVEL_CAP then PruneLevels(now) end
+        if seenCount >= LEVEL_CAP then return end
+        e = {}
+        seenLevels[guid] = e
+        seenCount = seenCount + 1
+    end
+    e.level, e.t = UnitLevel(unit), now
+end
+
+local function SnapshotLevels()
+    NoteLevel("target"); NoteLevel("focus"); NoteLevel("mouseover")
     if C_NamePlate and C_NamePlate.GetNamePlates then
         for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
-            if plate.namePlateUnitToken then Note(plate.namePlateUnitToken) end
+            if plate.namePlateUnitToken then NoteLevel(plate.namePlateUnitToken) end
         end
     end
 end
@@ -303,8 +355,10 @@ end
 
 -- true = dishonorable (I was grey to the killer), false = honorable, nil = unknown.
 local function WasDishonorable(killerGUID)
-    local lvl = killerGUID and seenLevels[killerGUID]
-    if not lvl then return nil end
+    local e = killerGUID and seenLevels[killerGUID]
+    if not e or GetTime() - e.t > LEVEL_MEMORY then return nil end
+    local lvl = e.level
+    if type(lvl) ~= "number" then return nil end
     if lvl == -1 then return true, "??" end -- skull: 10+ levels above me
     return UnitLevel("player") <= GreyLevel(lvl), lvl
 end
@@ -387,6 +441,15 @@ function PvP:CleanRecord(r)
         end
         out[k] = v
     end
+    -- Added in 0.4.2: left nil when the sender runs an older version (shown as unknown).
+    for _, k in ipairs({ "whk", "bghk", "dw", "dl" }) do
+        local v = r[k]
+        if v ~= nil and v ~= "" then
+            v = ns:Int(v, 0, MAX_STAT)
+            if not v then return nil end
+            out[k] = v
+        end
+    end
     local top = ns:CleanText(r.top, 48)
     out.top = top ~= "" and top or nil
     return out
@@ -404,24 +467,29 @@ ns:RegisterCallback("VALIDATE_DB", function()
     end
 end)
 
+-- Returns kills (world honorable kills; all honorable kills for members on a version
+-- older than 0.4.2), deaths, dishonorableKills, duelsWon, duelsLost (nil = unknown).
 function PvP:Get(fullName)
     local name = Short(fullName)
     if IsMe(name) then
         local deaths = self:Deaths()
-        return self:HonorableKills(), deaths, Mine().dishonorableKills or 0
+        local dw, dl = self:Duels()
+        return self:WorldKills(), deaths, Mine().dishonorableKills or 0, dw, dl
     end
     local store = GuildStore()
     local s = store and store[name]
-    if s then return s.hk, s.deaths, s.dk or s.nhk end
+    if s then return s.whk or s.hk, s.deaths, s.dk or s.nhk, s.dw, s.dl end
 end
 
 -- Extra tooltip lines for a roster row.
 function PvP:AddTooltip(tooltip, fullName)
     local name = Short(fullName)
-    local hk, deaths, lifetime, dk, kb, top, topN, dd
+    local hk, deaths, lifetime, dk, kb, top, topN, dd, whk, bghk, dw, dl
     if IsMe(name) then
         local p = Mine()
         hk = self:HonorableKills()
+        whk, bghk = self:WorldKills(), self:BattlegroundKills()
+        dw, dl = self:Duels()
         deaths, lifetime = self:Deaths()
         dk, kb, dd = p.dishonorableKills or 0, p.killingBlows or 0, p.dishonorableDeaths or 0
         top, topN = self:TopKiller()
@@ -431,6 +499,7 @@ function PvP:AddTooltip(tooltip, fullName)
         if not s then return end
         hk, deaths, lifetime, kb, top, topN = s.hk, s.deaths, s.lifetime, s.kb, s.top, s.topN
         dk, dd = s.dk or s.nhk, s.dd
+        whk, bghk, dw, dl = s.whk, s.bghk, s.dw, s.dl
     end
     tooltip:AddLine(" ")
     tooltip:AddLine(IsMe(name) and "PvP" or "PvP |cff808080(self-reported)|r", 1, 0.82, 0)
@@ -438,11 +507,17 @@ function PvP:AddTooltip(tooltip, fullName)
         tooltip:AddDoubleLine(label, tostring(value or 0) .. (note and ("  |cff808080" .. note .. "|r") or ""),
             0.8, 0.8, 0.8, 1, 1, 1)
     end
-    Line("Honorable kills", hk, "lifetime")
+    if whk then
+        Line("World honorable kills", whk, "lifetime")
+        Line("Battleground honorable kills", bghk, "lifetime")
+    else
+        Line("Honorable kills", hk, "lifetime, all (older version)")
+    end
     Line("Dishonorable kills", dk, "since install")
     Line("Killing blows on players", kb, "since install")
     Line("Deaths to players", deaths, lifetime and "lifetime" or "since install")
     if dd then Line("Dishonorable deaths", dd, "since install") end
+    if dw then Line("Duels won / lost", ("%d / %d"):format(dw, dl or 0), "lifetime") end
     if top and topN and topN > 0 then
         tooltip:AddDoubleLine("Most killed by", ("%s (%d)"):format(top, topN), 0.8, 0.8, 0.8, 1, 0.4, 0.4)
     end
@@ -461,7 +536,14 @@ ns:RegisterEvent("PLAYER_PVP_KILLS_CHANGED", OnPvPKillsChanged)
 ns:RegisterEvent("CHAT_MSG_COMBAT_HONOR_GAIN", OnHonorGain)
 ns:RegisterEvent("PARTY_KILL", OnPartyKill)
 ns:RegisterEvent("PLAYER_DEAD", OnPlayerDead)
-ns:RegisterEvent("DUEL_FINISHED", function() duelEndedAt = GetTime() end)
+ns:RegisterEvent("PLAYER_TARGET_CHANGED", function() NoteLevel("target") end)
+ns:RegisterEvent("PLAYER_FOCUS_CHANGED", function() NoteLevel("focus") end)
+ns:RegisterEvent("UPDATE_MOUSEOVER_UNIT", function() NoteLevel("mouseover") end)
+ns:RegisterEvent("NAME_PLATE_UNIT_ADDED", function(_, unit) NoteLevel(unit) end)
+ns:RegisterEvent("DUEL_FINISHED", function()
+    duelEndedAt = GetTime()
+    C_Timer.After(3, Changed) -- the duel statistics update a moment after the duel
+end)
 
 
 ---------------------------------------------------------------------------
@@ -475,6 +557,10 @@ ns:RegisterCommand("pvpdebug", function()
     ns:Print("PvP debug:")
     out(("Lifetime HK: GetPVPLifetimeStats=%s, statistic %d=%s -> shown %d"):format(
         tostring(LifetimeAPI()), STAT_HK, tostring(StatNumber(STAT_HK)), PvP:HonorableKills()))
+    local dw, dl = PvP:Duels()
+    out(("World HK: statistic %d=%s, battleground HK: statistic %d=%s -> Kills column %d; duels %d/%d"):format(
+        STAT_WORLD_HK, tostring(StatNumber(STAT_WORLD_HK)), STAT_BG_HK, tostring(StatNumber(STAT_BG_HK)),
+        PvP:WorldKills(), dw, dl))
     local okS, sHK, sHonor = pcall(GetPVPSessionStats or function() end)
     out(("Session: HK=%s honor=%s"):format(tostring(okS and sHK), tostring(okS and sHonor)))
     local deaths, lifetime = PvP:Deaths()
@@ -501,3 +587,49 @@ ns:RegisterCommand("pvpdebug", function()
     out(("Guildmates' stats received: %d"):format(#names))
     for _, line in ipairs(names) do out("  " .. line) end
 end, "show PvP kill/death numbers and the last signals")
+
+---------------------------------------------------------------------------
+-- /tavern pvpstatprobe: lists every game statistic whose name or category looks
+-- PvP-related (id, category, name, value), to find out whether WoW: Forever keeps
+-- separate battleground / arena / world kill counts. Reads only; sends nothing.
+---------------------------------------------------------------------------
+local PROBE_WORDS = { "kill", "honor", "battleground", "arena", "world", "pvp", "player", "death" }
+
+local function Matches(text)
+    text = (text or ""):lower()
+    for _, w in ipairs(PROBE_WORDS) do
+        if text:find(w, 1, true) then return true end
+    end
+    return false
+end
+
+ns:RegisterCommand("pvpstatprobe", function()
+    local out = function(s) DEFAULT_CHAT_FRAME:AddMessage("  " .. s) end
+    if type(GetStatisticsCategoryList) ~= "function" then
+        ns:Print("pvpstatprobe: GetStatisticsCategoryList is missing.")
+        return
+    end
+    local okL, cats = pcall(GetStatisticsCategoryList)
+    if not okL or type(cats) ~= "table" then
+        ns:Print("pvpstatprobe: could not read the statistics categories.")
+        return
+    end
+    ns:Print(("PvP statistic probe (%d categories):"):format(#cats))
+    local shown = 0
+    for _, cat in ipairs(cats) do
+        local okC, catName, parent = pcall(GetCategoryInfo, cat)
+        local parentName = (okC and parent and parent > 0) and select(2, pcall(GetCategoryInfo, parent)) or ""
+        local catMatch = okC and (Matches(catName) or Matches(parentName))
+        local okN, n = pcall(GetCategoryNumAchievements, cat, true)
+        for i = 1, (okN and tonumber(n) or 0) do
+            local okA, id, name = pcall(GetAchievementInfo, cat, i)
+            if okA and id and (catMatch or Matches(name)) then
+                out(("%d [%s] %s = %s"):format(id, tostring(okC and catName or cat), tostring(name),
+                    tostring(StatNumber(id) or "?")))
+                shown = shown + 1
+            end
+        end
+    end
+    local inInstance, kind = IsInInstance()
+    out(("%d statistics listed. Here now: %s"):format(shown, inInstance and tostring(kind) or "open world"))
+end, "developer: list PvP-related game statistics (reads only)")

@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: Unc's Tavern
 ## Notes: Guild hub: roster with PvP stats, wishlist, mailbox helpers.
-## Version: 0.4.1
+## Version: 0.4.2
 ## IconTexture: Interface\AddOns\Uncs_Tavern\Media\Icon
 ## SavedVariables: UncsTavernDB
 ## SavedVariablesPerCharacter: UncsTavernCharDB

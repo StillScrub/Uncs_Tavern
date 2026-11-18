@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-19
+
+### Added
+- **Key binding:** Options > Keybindings > AddOns > Unc's Tavern > "Open / close Unc's Tavern" (no key set by default; e.g. Shift-J).
+- **Duels** on the guild tab: separate **Won** and **Lost** columns (lifetime), each sortable.
+- Hovering a member shows their battleground honorable kills and duels.
+- `/tavern pvpstatprobe` (developer check): lists the game's PvP statistics.
+
+### Changed
+- Guild tab headers have a second row: **Open World PvP** over Kills, Deaths, K/D and Dishon. (dishonorable kills), and **Duels** over Won and Lost.
+- **Kills** now counts open-world honorable kills only; battleground kills are left out (shown on hover). Members on older versions still show all their kills until they update.
+- **Helped** moved from a column to the member tooltip; it is still tracked and shared as before.
+- New, centered mug icon that fits inside the portrait ring.
+
+### Fixed
+- Dishonorable deaths were missed when the killer was no longer on screen at the moment of death. The killer's level is now remembered from any time you saw them in the last 5 minutes (target, mouseover, focus or nameplate).
+- The portrait icon no longer shows outside the gold ring.
+
 ## [0.4.1] - 2026-11-17
 
 ### Changed
@@ -107,7 +125,8 @@ First release.
 - Wishlist uses drag only: shift-click opened the bag's split-stack box, which grabbed keyboard input.
 - Level-up posts now go through: WoW: Forever blocks addon chat that isn't triggered by a click.
 
-[Unreleased]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.2.0...v0.3.0

@@ -276,6 +276,10 @@ local function PrintHelp()
 end
 ns:RegisterCommand("help", PrintHelp, "show this list")
 
+-- Key binding names (Bindings.xml): shown in Options > Keybindings > AddOns.
+BINDING_HEADER_UNCSTAVERN = ns.title
+BINDING_NAME_UNCSTAVERN_TOGGLE = "Open / close Unc's Tavern"
+
 SLASH_UNCSTAVERN1 = "/tavern"
 SlashCmdList.UNCSTAVERN = function(msg)
     local cmd, rest = strtrim(msg or ""):match("^(%S*)%s*(.-)$")

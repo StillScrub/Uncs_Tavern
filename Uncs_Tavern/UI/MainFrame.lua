@@ -59,11 +59,13 @@ local function CharDB() return ns.charDB or {} end
 ---------------------------------------------------------------------------
 -- Portrait art helpers
 ---------------------------------------------------------------------------
+local PORTRAIT_INSET = 3 -- px the icon sits inside the portrait area (see CreatePortraitButton)
+
 local function AddCircleMask(owner, ...)
     if not owner.CreateMaskTexture then return end
     local mask = owner:CreateMaskTexture()
     mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-    mask:SetAllPoints()
+    mask:SetAllPoints((...)) -- same size as the first texture (the icon)
     for i = 1, select("#", ...) do
         local tex = select(i, ...)
         if tex.AddMaskTexture then tex:AddMaskTexture(mask) end
@@ -105,12 +107,15 @@ local function CreatePortraitButton(name, window, portrait, tooltip, onClick)
     -- inset even though we're on top.
     b:SetFrameLevel(window:GetFrameLevel() + ON_TOP)
 
+    -- The portrait area is a little larger than the ring's opening, so the icon is
+    -- inset by PORTRAIT_INSET px on every side; otherwise its edge shows outside the ring.
     local icon = b:CreateTexture(nil, "ARTWORK")
     icon:SetTexture(ICON)
-    icon:SetAllPoints()
+    icon:SetPoint("TOPLEFT", PORTRAIT_INSET, -PORTRAIT_INSET)
+    icon:SetPoint("BOTTOMRIGHT", -PORTRAIT_INSET, PORTRAIT_INSET)
     local glow = b:CreateTexture(nil, "HIGHLIGHT")
     glow:SetColorTexture(1, 0.85, 0.5, 0.12)
-    glow:SetAllPoints()
+    glow:SetAllPoints(icon)
     AddCircleMask(b, icon, glow)
     CopyRing(b, window)
 
