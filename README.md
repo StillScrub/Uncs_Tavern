@@ -5,8 +5,9 @@ A guild hub addon for any guild on World of Warcraft: Forever. It adds a togglea
 [![Latest release](https://img.shields.io/github/v/release/StillScrub/Uncs_Tavern?label=release)](https://github.com/StillScrub/Uncs_Tavern/releases/latest)
 [![Game version](https://img.shields.io/badge/WoW-Forever%20(16001)-c69b3a)](#installation)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![CurseForge](https://img.shields.io/badge/CurseForge-Unc's%20Tavern-f16436)](https://www.curseforge.com/wow/addons/uncs-tavern)
 
-### [⬇ Download latest release](https://github.com/StillScrub/Uncs_Tavern/releases/latest)
+### [⬇ Get it on CurseForge](https://www.curseforge.com/wow/addons/uncs-tavern) · [Download from GitHub](https://github.com/StillScrub/Uncs_Tavern/releases/latest)
 
 ---
 
@@ -76,6 +77,10 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 | ![Settings](docs/screenshots/settings.png) | |
 
 ## Installation
+
+**With the CurseForge app (easiest):** search for **Unc's Tavern** under World of Warcraft with the game version set to Forever, or open the [CurseForge page](https://www.curseforge.com/wow/addons/uncs-tavern) and click Install. The app keeps it updated.
+
+**By hand:**
 
 1. Download `Uncs_Tavern-vX.Y.Z.zip` from the [latest release](https://github.com/StillScrub/Uncs_Tavern/releases/latest).
 2. Extract it into your game folder's `_forever_\Interface\AddOns\`, so you end up with:
