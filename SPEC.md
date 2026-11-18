@@ -60,12 +60,27 @@ A guild hub addon for any guild on World of Warcraft: Forever. The guild is read
 - **Sell warning:** selling an item a guildmate asked for gives a red on-screen + chat message pointing to the vendor's Buyback tab. Detected afterwards from the buyback list; the sale is never stopped.
 - **Minimap button:** red badge with the number of guildmates' requests created since you last opened the Wishlist tab (per character).
 
-## 5. Mailbox "Guild Requests" tab (planned)
-- New tab next to Inbox / Send Mail.
-- Lists only requests the player can fill from their bags.
-- Picking one shows a draft: recipient, subject ("Unc's Tavern: Item ×N"), items attached, COD pre-filled as quantity × requester's price (or Gift). Everything is editable. (COD mail currently fails on the Forever server, "Internal mail database error" even without addons; until that's fixed the panel should not pre-fill COD.)
-- While COD is broken, the Wishlist form's **Pay up to** option is greyed out with the note "Disabled: COD mail is broken on the server right now." New requests are Gift only (`PAY_DISABLED` in Wishlist.lua).
-- "Fill Send Mail" fills the real Send Mail form. The player presses Send.
+## 5. Mailbox "Guild Requests" panel (planned for v0.5.0, agreed 2026-11-18, not started)
+**What players get:** at the mailbox, a **Guild Requests** panel lists open guild requests you can fill from your own bags. Click one, then **Fill Send Mail**: Blizzard's Send Mail form gets the recipient, the subject `Unc's Tavern: <Item> ×N` and the items attached from your bags (stacks split to the exact amount). You check it and press Blizzard's **Send** yourself. When the mail actually goes out, your claim updates automatically ("I'm sending N"); the requester's addon confirms on receipt, so the Guild log can show Confirmed.
+
+**Design:**
+- **A panel docked to the right edge of the mail window, not a new mailbox tab** (with a small button to open/close it). Adding a tab means writing into Blizzard's mail-window tab system, which risks tainting Blizzard's own actions; a docked panel is our own frame.
+- **We never send.** Fill acts only on the player's click; Send and anything that sends stay Blizzard's.
+- **No COD while COD mail is broken on the server** ("Internal mail database error", even without addons). The panel shows "Gift" or the requester's price as text only. The existing switch (`PAY_DISABLED` in Wishlist.lua, which also greys out the Wishlist form's **Pay up to**) turns on the COD pre-fill when the server is fixed: quantity × the requester's price, clearly shown.
+- Event-driven only (mailbox and bag events, no timers). New file `Modules\Mail.lua`; existing modules get small hooks only.
+
+**The list:** other players' open requests (never your own) where your bags hold the item, or for rule requests any bag item that fits the rule. Columns: item and requester, **needs** (quantity minus received), **you have**, payment (Gift / price). Sorted by what you can fill completely. If you already claimed it, it shows your claim and Fill uses that amount.
+
+**Step 1 is an in-game probe**, because Forever blocked guild chat from a plain button click and might block attaching too: `/tavern mailprobe` (Send Mail tab open) tests filling recipient and subject, splitting a stack and attaching 1 item, and clearing the attachment. It never sends. If attaching is blocked, the fallback fills recipient and subject and shows "attach N × Item" with the item highlighted in your bags, for the player to drag in.
+
+**Build steps (one commit each, with in-game test steps):**
+1. `/tavern mailprobe` → test in game.
+2. The panel and list (read-only).
+3. Fill Send Mail: recipient, subject, attachments (or the fallback).
+4. Auto-claim when the mail is sent, plus the Guild log tie-in.
+5. `/tavern securitytest` additions, taint check (guild invite and Blizzard's mail still work), then SPEC, README and CHANGELOG.
+
+**Deferred:** the COD mismatch check in the Guild log ("paid more than the price"); it needs working COD mail, like the COD pre-fill.
 
 ## 6. Level-up post
 - On level-up (after combat), a popup offers to post to guild chat: `[Unc's Tavern] <Name> reached level <N>!` The player clicks **Post** — WoW: Forever only lets addons post to chat on a click.
