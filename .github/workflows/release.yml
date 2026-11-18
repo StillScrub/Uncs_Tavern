@@ -3,10 +3,16 @@
 # it into Interface\AddOns gives AddOns\Uncs_Tavern\Uncs_Tavern.toc.
 # Release notes come from that version's section in CHANGELOG.md.
 #
-# Hardening: runs only on tag pushes (never on pull requests), no stored secrets,
-# the only action is pinned to a commit, write access is granted to this one job,
-# the checkout doesn't keep the token, and the tag name reaches the shell only as
-# an environment variable (never pasted into the script).
+# A second job then uploads that same zip to CurseForge. If that upload fails,
+# the GitHub Release already exists and nothing is lost.
+#
+# Hardening: runs only on tag pushes (never on pull requests), the only action is
+# pinned to a commit, write access is granted to the release job only, the
+# checkout doesn't keep the token, and the tag name reaches the shell only as an
+# environment variable (never pasted into the script). The one secret,
+# CF_API_TOKEN, lives in the "curseforge" environment (v* tags only), is read
+# only by the upload job, which has no write access to the repo, and is never
+# put on a command line or printed.
 name: Release
 
 on:
@@ -75,3 +81,61 @@ jobs:
             --title "Unc's Tavern $TAG" \
             --notes-file release_notes.md \
             --verify-tag
+
+  curseforge:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: curseforge
+    permissions:
+      contents: read # download the release just created
+    env:
+      TAG: ${{ github.ref_name }}
+      CF_PROJECT_ID: "1812461"
+      CF_GAME_VERSION: "1.60.1" # WoW: Forever, as listed on CurseForge
+    steps:
+      - name: Download the release zip and notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ZIP="Uncs_Tavern-${TAG}.zip"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ZIP"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > release_notes.md
+          ls -l "$ZIP"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+
+      - name: Upload to CurseForge
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: |
+          if [ -z "$CF_API_TOKEN" ]; then
+            echo "::error::CF_API_TOKEN is not set in the curseforge environment"
+            exit 1
+          fi
+          # Keep the token off the command line: curl reads the header from a file.
+          HDR="$RUNNER_TEMP/cf_header"
+          trap 'rm -f "$HDR"' EXIT
+          ( umask 077; printf 'X-Api-Token: %s\n' "$CF_API_TOKEN" > "$HDR" )
+
+          curl -sS --fail-with-body -H @"$HDR" \
+            https://wow.curseforge.com/api/game/versions > versions.json
+          IDS=$(jq -c --arg v "$CF_GAME_VERSION" '[.[] | select(.name == $v) | .id]' versions.json)
+          if [ "$(jq length <<<"$IDS")" != "1" ]; then
+            echo "::error::Expected one CurseForge game version named $CF_GAME_VERSION, found: $IDS"
+            exit 1
+          fi
+          echo "Game version $CF_GAME_VERSION -> id $IDS"
+
+          jq -n --rawfile notes release_notes.md --argjson ids "$IDS" --arg name "Unc's Tavern $TAG" '{
+            changelog: $notes, changelogType: "markdown", displayName: $name,
+            gameVersions: $ids, releaseType: "release"
+          }' > metadata.json
+
+          STATUS=$(curl -sS -o response.json -w '%{http_code}' -H @"$HDR" \
+            -F "metadata=<metadata.json;type=application/json" \
+            -F "file=@${ZIP}" \
+            "https://wow.curseforge.com/api/projects/${CF_PROJECT_ID}/upload-file")
+          cat response.json; echo
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::CurseForge upload failed (HTTP $STATUS)"
+            exit 1
+          fi
