@@ -30,4 +30,5 @@ Modules\Alerts.lua
 Modules\PvPStats.lua
 Modules\VisualProbe.lua
 Modules\Cheers.lua
+Modules\Milestones.lua
 Modules\SecurityTest.lua

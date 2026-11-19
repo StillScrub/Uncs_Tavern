@@ -1,9 +1,10 @@
 -- Modules\Cheers.lua: a celebration when a guildmate reaches the level cap.
 --
--- Step 2 (look and sound only): /tavern cheers test plays the show for yourself,
--- locally. Nothing is sent. Triggers come later.
+-- Cheers:Play(name, classFile, theme, opts) plays it; Modules\Milestones.lua decides
+-- when. /tavern cheers test plays it for yourself, locally. Nothing is sent from here.
 --
--- Built only from the game's own art (atlases / texture paths), fonts and sound kits.
+-- Our own painted plate and medal (Media\Cheers) plus the game's fonts, sound kits and
+-- glow textures (by path).
 -- Everything animates with AnimationGroups (no OnUpdate); the sequence uses one-shot
 -- C_Timer calls that check a show token, so skipping cancels the rest. Frames are
 -- created on the first show and reused; after the show they're hidden with every
@@ -16,6 +17,7 @@ ns.Cheers = Cheers
 local LEVEL_CAP  = 60
 local DURATION   = 12.0  -- seconds until the fade-out finishes
 local FADE_AT    = 10.5
+local QUIET_FADE_AT = 4.0 -- quiet version (after combat): banner only, short
 local FONT       = "Fonts\\FRIZQT__.TTF"
 local BURSTS     = 9     -- firework bursts in the pool
 local SPARKS     = 10    -- sparks per burst
@@ -76,6 +78,7 @@ local MUG = "|TInterface\\AddOns\\Uncs_Tavern\\Media\\Icon:14:14|t"
 local root, showToken = nil, 0
 local loops = {}      -- animation groups that loop (stopped when the show ends)
 local bursts, confetti = {}, {}
+local onDone   -- called once when the current show ends (skipped, finished or replaced)
 local onlyPart -- debug: show just one medallion light (/tavern cheers only)
 
 ---------------------------------------------------------------------------
@@ -501,13 +504,28 @@ function Cheers:Stop()
     for _, t in ipairs(confetti) do t.group:Stop(); t:SetAlpha(0) end
     root:SetAlpha(1)
     root:Hide()
+    local done = onDone
+    onDone = nil
+    if done then C_Timer.After(0.5, done) end
+end
+
+-- "<mug> <Name> has reached level 60!" in my own chat only (never sent).
+-- name comes from my own roster (or is my own), never from a message.
+function Cheers:ChatLine(name, classFile)
+    local r, g, b = ClassColorOf(classFile)
+    DEFAULT_CHAT_FRAME:AddMessage(("%s |cff%02x%02x%02x%s|r has reached level %d!"):format(
+        MUG, math.floor(r * 255), math.floor(g * 255), math.floor(b * 255), name or "?", LEVEL_CAP))
 end
 
 -- name: character name to show; classFile: e.g. "WARRIOR" (for color and icon).
 -- theme: "neutral" / "alliance" / "horde" to force one (preview); default = my faction.
-function Cheers:Play(name, classFile, theme)
+-- opts (optional): quiet = true for the short banner-only version (no sounds, fireworks
+-- or confetti); onDone = fn called once the show ends, however it ends.
+function Cheers:Play(name, classFile, theme, opts)
     if not root then Create() end
     self:Stop()
+    onDone = opts and opts.onDone
+    local quiet = opts and opts.quiet
     local token = showToken
     local r, g, b = ClassColorOf(classFile)
 
@@ -530,10 +548,7 @@ function Cheers:Play(name, classFile, theme)
     root:SetAlpha(1)
     root:Show()
 
-    -- One line in my own chat (never sent), in case the banner is skipped or missed.
-    -- name comes from my own roster (or is my own), never from a message.
-    DEFAULT_CHAT_FRAME:AddMessage(("%s |cff%02x%02x%02x%s|r has reached level %d!"):format(
-        MUG, math.floor(r * 255), math.floor(g * 255), math.floor(b * 255), name or "?", LEVEL_CAP))
+    self:ChatLine(name, classFile) -- in case the banner is skipped or missed
 
     for _, p in ipairs(root.glowParts) do -- debug: /tavern cheers only <part>
         p[2]:SetShown(onlyPart == nil or onlyPart == p[1])
@@ -548,6 +563,11 @@ function Cheers:Play(name, classFile, theme)
     Later(token, 1.3, function() root.level:SetAlpha(1); root.levelIn:Play() end)
     for _, at in ipairs({ 3.0, 5.0, 7.0, 9.0 }) do -- the shimmer sweeps again every 2 s
         Later(token, at, function() root.glowFlash:Stop(); root.glowFlash:Play() end)
+    end
+
+    if quiet then
+        Later(token, QUIET_FADE_AT, function() root.fade:Play() end)
+        return
     end
 
     for _, s in ipairs(SOUNDS) do

@@ -164,6 +164,7 @@ local DEFAULTS = {
         tooltipLines  = true,
         minimapButton = true,
         minimapBadge  = true,
+        celebrations  = true,
         requestExpiryDays = 14, -- forget other players' requests after this many days unseen
         debug         = false,  -- enables /tavern securitytest
     },
@@ -174,6 +175,7 @@ local DEFAULTS = {
     roster   = {},
     pvp      = {}, -- [guildKey][name] = guildmates' shared PvP stats
     seenItems = {}, -- [itemID] = true, items seen in bags (wishlist search)
+    milestones = {}, -- [guildKey] = { levels = { [name] = level }, done = { [name] = true } } (Milestones.lua)
     -- Phase B (Permissions.lua, Moderation.lua, GuildLog.lua), all per guild key:
     perms      = {}, -- [guildKey] = { t, mod, log, days, ranks }: rank config from the guild leader
     modActions = {}, -- [guildKey][id] = my own moderator actions (re-announced for 14 days)
