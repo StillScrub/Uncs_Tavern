@@ -31,7 +31,6 @@ local COMBAT_WAIT  = 60
 local seeded = {}      -- [guildKey] = true once this session's first roster read is recorded
 local scanPending = false
 local queue = {}       -- { name, classFile, quiet }
-local playing = false
 local waiting = false  -- waiting for combat to end
 local waitToken = 0
 local lastBell = {}    -- [sender] = GetTime()
@@ -71,11 +70,6 @@ end
 ---------------------------------------------------------------------------
 local PlayNext
 
-local function Finished()
-    playing = false
-    PlayNext()
-end
-
 local function OnRegen()
     ns:UnregisterEvent("PLAYER_REGEN_ENABLED", OnRegen)
     if not waiting then return end
@@ -101,13 +95,14 @@ local function WaitForCombat()
 end
 
 PlayNext = function()
-    if playing or waiting or #queue == 0 then return end
+    -- Waits while any show plays (mine included); CHEERS_DONE brings us back.
+    if waiting or #queue == 0 or ns.Cheers:IsPlaying() then return end
     if not Enabled() then wipe(queue) return end
     if InCombatLockdown() then WaitForCombat() return end
     local item = table.remove(queue, 1)
-    playing = true
-    ns.Cheers:Play(item.name, item.classFile, nil, { quiet = item.quiet, onDone = Finished })
+    ns.Cheers:Play(item.name, item.classFile, nil, { quiet = item.quiet })
 end
+ns:RegisterCallback("CHEERS_DONE", function() PlayNext() end)
 
 local function Celebrate(name, classFile)
     if not Enabled() or #queue >= MAX_QUEUE then return end

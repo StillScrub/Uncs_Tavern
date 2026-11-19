@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added a little something for those who reach level 60.
+
 ## [0.4.2] - 2026-11-19
 
 ### Added

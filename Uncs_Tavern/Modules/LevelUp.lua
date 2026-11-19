@@ -12,7 +12,7 @@ local _, ns = ...
 local FORMAT  = "[Unc's Tavern] %s reached level %d!"
 local MAX_LOG = 30
 
-local pending -- level waiting for combat to end before the popup is shown
+local pending -- { level, popupOnly } waiting for combat to end
 
 local function Message(level)
     return FORMAT:format(ns:PlayerName(), level)
@@ -129,7 +129,85 @@ local function ShowPopup(level)
     return true
 end
 
-local function Offer(level)
+---------------------------------------------------------------------------
+-- My own ding to the level cap: the celebration (Modules\Cheers.lua) plays instead of
+-- the popup, with a Post button under the banner (the same secure macro button idea).
+-- The button lives in its own frame on UIParent, NOT inside the celebration: a frame
+-- holding a secure button can't be hidden in combat, and the celebration must always
+-- be able to hide. Its macro text is set only out of combat (the show only starts then).
+-- If the show ends without a post, the normal popup follows so the post isn't lost.
+---------------------------------------------------------------------------
+local LEVEL_CAP = 60
+local bar
+local barToken = 0
+
+local function HideBarNow()
+    ns:UnregisterEvent("PLAYER_REGEN_ENABLED", HideBarNow)
+    if bar then bar:Hide() end
+end
+
+local function HideBar()
+    if not bar or not bar:IsShown() then return end
+    if InCombatLockdown() then
+        ns:UnregisterEvent("PLAYER_REGEN_ENABLED", HideBarNow) -- never twice
+        ns:RegisterEvent("PLAYER_REGEN_ENABLED", HideBarNow)
+    else
+        bar:Hide()
+    end
+end
+
+local function CreateBar()
+    bar = CreateFrame("Frame", "UncsTavernCheersPostBar", UIParent)
+    bar:SetSize(160, 26)
+    bar:SetFrameStrata("FULLSCREEN_DIALOG")
+    bar:SetFrameLevel(100) -- above the celebration
+    local post = CreateFrame("Button", "UncsTavernCheersPost", bar, "SecureActionButtonTemplate,UIPanelButtonTemplate")
+    post:SetAllPoints()
+    post:SetText("Post to guild chat")
+    post:RegisterForClicks("LeftButtonUp", "LeftButtonDown")
+    post:SetAttribute("type", "macro")
+    post:SetScript("PostClick", function(_, _, down)
+        if down ~= GetCVarBool("ActionButtonUseKeyDown") then return end -- the half that didn't act
+        Log("cap post clicked")
+        bar.posted = true
+        HideBar()
+    end)
+    bar.post = post
+    bar:Hide()
+end
+
+local Queue -- defined below
+
+local function CelebrateMine(level)
+    local posting = IsInGuild() and ns.db.settings.levelUpPosts
+    barToken = barToken + 1
+    local mine = barToken
+    if posting then
+        if not bar then CreateBar() end
+        ns:UnregisterEvent("PLAYER_REGEN_ENABLED", HideBarNow)
+        bar.post:SetAttribute("macrotext", "/g " .. Message(level))
+        bar.posted = false
+        bar:ClearAllPoints()
+        -- Under the banner (Cheers puts its centre a third of the way down the screen).
+        bar:SetPoint("TOP", UIParent, "TOP", 0, -(UIParent:GetHeight() / 3 + 122))
+        bar:Show()
+        bar:Raise()
+    end
+    Log("celebrating my own level " .. level)
+    ns.Cheers:Play(ns:PlayerName(), ns:PlayerClass(), nil, { onDone = function()
+        if mine ~= barToken then return end
+        local posted = bar and bar.posted
+        HideBar()
+        if posting and not posted then Queue(level, true) end
+    end })
+end
+
+-- popupOnly: skip the celebration (it already played).
+local function Offer(level, popupOnly)
+    if not popupOnly and level == LEVEL_CAP and ns.db.settings.celebrations then
+        CelebrateMine(level)
+        return
+    end
     if not IsInGuild() or not ns.db.settings.levelUpPosts then return end
     Log("offering post for level " .. level)
     ShowPopup(level)
@@ -137,21 +215,28 @@ end
 
 local function OnRegenEnabled()
     ns:UnregisterEvent("PLAYER_REGEN_ENABLED", OnRegenEnabled)
-    if pending then Offer(pending) end
+    local p = pending
     pending = nil
+    if p then Offer(p.level, p.popupOnly) end
+end
+
+-- Now, or when combat ends (never pops up mid-fight; secure buttons need it too).
+Queue = function(level, popupOnly)
+    if InCombatLockdown() then
+        if not pending then ns:RegisterEvent("PLAYER_REGEN_ENABLED", OnRegenEnabled) end
+        pending = { level = level, popupOnly = popupOnly }
+    else
+        Offer(level, popupOnly)
+    end
 end
 
 local function OnLevelUp(_, level)
     level = tonumber(level)
     Log(("PLAYER_LEVEL_UP level=%s combat=%s"):format(tostring(level), tostring(InCombatLockdown())))
-    if not level or not ns.db.settings.levelUpPosts or not IsInGuild() then return end
-    -- Don't pop up mid-fight; wait until combat ends.
-    if InCombatLockdown() then
-        if not pending then ns:RegisterEvent("PLAYER_REGEN_ENABLED", OnRegenEnabled) end
-        pending = level
-    else
-        Offer(level)
-    end
+    if not level then return end
+    local celebrate = level == LEVEL_CAP and ns.db.settings.celebrations
+    local post = ns.db.settings.levelUpPosts and IsInGuild()
+    if celebrate or post then Queue(level, false) end
 end
 ns:RegisterEvent("PLAYER_LEVEL_UP", OnLevelUp)
 
@@ -167,6 +252,11 @@ ns.Settings:RegisterToggle({
 --   /tavern levelup          preview the line locally (sends nothing)
 --   /tavern levelup popup    show the popup now, to try it (Post really sends)
 ns:RegisterCommand("levelup", function(arg)
+    if arg:lower() == "cap" then -- hidden: try my own level-cap moment (Post really sends)
+        if InCombatLockdown() then ns:Print("Try again out of combat.") return end
+        Offer(LEVEL_CAP, false)
+        return
+    end
     if arg:lower() == "popup" then
         if not ShowPopup(UnitLevel("player")) then ns:Print("Try again out of combat.") end
         return

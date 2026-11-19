@@ -1,7 +1,9 @@
 -- Modules\Cheers.lua: a celebration when a guildmate reaches the level cap.
 --
 -- Cheers:Play(name, classFile, theme, opts) plays it; Modules\Milestones.lua decides
--- when. /tavern cheers test plays it for yourself, locally. Nothing is sent from here.
+-- when for guildmates, Modules\LevelUp.lua for my own ding. Fires "CHEERS_DONE" (0.5 s
+-- after a show ends, however it ends). /tavern cheers test plays it for yourself,
+-- locally. Nothing is sent from here.
 --
 -- Our own painted plate and medal (Media\Cheers) plus the game's fonts, sound kits and
 -- glow textures (by path).
@@ -79,7 +81,6 @@ local root, showToken = nil, 0
 local loops = {}      -- animation groups that loop (stopped when the show ends)
 local bursts, confetti = {}, {}
 local onDone   -- called once when the current show ends (skipped, finished or replaced)
-local onlyPart -- debug: show just one medallion light (/tavern cheers only)
 
 ---------------------------------------------------------------------------
 -- Small helpers
@@ -236,10 +237,8 @@ local function CreateBanner()
         t:SetVertexColor(1, 0.85, 0.4)
     end)
     Pulse(halo, 0.25, 0.6, 1.3)
-    local parts = { { "rays", rays }, { "burst", burst }, { "halo", halo } } -- for /tavern cheers only
     for i = 1, 2 do -- light beams turning slowly behind the medallion
         local beam = glows:CreateTexture(nil, "BACKGROUND", nil, 2)
-        parts[#parts + 1] = { "beam" .. i, beam }
         beam:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
         beam:SetBlendMode("ADD")
         beam:SetVertexColor(1, 0.85, 0.45)
@@ -259,8 +258,6 @@ local function CreateBanner()
     twinkle:ClearAllPoints()
     twinkle:SetPoint("CENTER", medal, "TOPRIGHT", -26, -30)
     Pulse(twinkle, 0, 1, 0.6)
-    parts[#parts + 1] = { "twinkle", twinkle }
-    root.glowParts = parts
 
     -- Text in the plate's empty middle, with a soft dark shadow so it sits in the art.
     local name = banner:CreateFontString(nil, "OVERLAY")
@@ -489,9 +486,14 @@ local function Create()
     root.fade = fade
 end
 
+function Cheers:IsPlaying()
+    return root ~= nil and root:IsShown()
+end
+
 function Cheers:Stop()
     showToken = showToken + 1
     if not root then return end
+    local wasShown = root:IsShown()
     root.fade:Stop()
     for _, g in ipairs({ root.unfurl, root.textIn, root.glowIn, root.nameIn, root.levelIn, root.glowFlash }) do
         g:Stop()
@@ -507,6 +509,7 @@ function Cheers:Stop()
     local done = onDone
     onDone = nil
     if done then C_Timer.After(0.5, done) end
+    if wasShown then C_Timer.After(0.5, function() ns:Fire("CHEERS_DONE") end) end
 end
 
 -- "<mug> <Name> has reached level 60!" in my own chat only (never sent).
@@ -549,10 +552,6 @@ function Cheers:Play(name, classFile, theme, opts)
     root:Show()
 
     self:ChatLine(name, classFile) -- in case the banner is skipped or missed
-
-    for _, p in ipairs(root.glowParts) do -- debug: /tavern cheers only <part>
-        p[2]:SetShown(onlyPart == nil or onlyPart == p[1])
-    end
 
     root.unfurl:Play()
     for _, group in ipairs(loops) do group:Play() end
@@ -605,20 +604,8 @@ ns:RegisterCommand("cheers", function(arg)
         Cheers:Play(ns:PlayerName(), classFile, theme ~= "" and theme or nil)
     elseif cmd == "stop" then
         Cheers:Stop()
-    elseif cmd == "only" then -- /tavern cheers only <part|none|all>: show one medallion light
-        if not root then Create() end
-        local names = {}
-        for _, p in ipairs(root.glowParts) do names[#names + 1] = p[1] end
-        if theme == "all" then
-            onlyPart = nil
-        elseif theme == "none" or tContains(names, theme) then
-            onlyPart = theme
-        else
-            ns:Print("Lights: " .. table.concat(names, ", ") .. ", none, all")
-            return
-        end
-        ns:Print("Medallion lights: " .. (onlyPart or "all"))
-        local _, classFile = UnitClass("player")
-        Cheers:Play(ns:PlayerName(), classFile)
     end
 end, nil, true)
+
+-- Leftover from a removed developer tool.
+ns:RegisterCallback("VALIDATE_DB", function() ns.db.probeList = nil end)
