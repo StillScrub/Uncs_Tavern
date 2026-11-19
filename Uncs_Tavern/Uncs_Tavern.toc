@@ -28,4 +28,6 @@ Modules\LevelUp.lua
 Modules\MinimapButton.lua
 Modules\Alerts.lua
 Modules\PvPStats.lua
+Modules\VisualProbe.lua
+Modules\Cheers.lua
 Modules\SecurityTest.lua

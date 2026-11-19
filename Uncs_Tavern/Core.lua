@@ -260,10 +260,11 @@ ns:RegisterEvent("ADDON_LOADED", OnAddonLoaded)
 ---------------------------------------------------------------------------
 local commands, commandOrder = {}, {}
 
-function ns:RegisterCommand(name, fn, help)
+-- hidden = true keeps a command out of /tavern help (developer tools).
+function ns:RegisterCommand(name, fn, help, hidden)
     name = name:lower()
     if not commands[name] then commandOrder[#commandOrder + 1] = name end
-    commands[name] = { fn = fn, help = help }
+    commands[name] = { fn = fn, help = help, hidden = hidden }
 end
 
 local function PrintHelp()
@@ -271,7 +272,9 @@ local function PrintHelp()
     DEFAULT_CHAT_FRAME:AddMessage("  /tavern - open or close Unc's Tavern (swaps with the guild window if open)")
     for _, name in ipairs(commandOrder) do
         local help = commands[name].help
-        DEFAULT_CHAT_FRAME:AddMessage("  /tavern " .. name .. (help and (" - " .. help) or ""))
+        if not commands[name].hidden then
+            DEFAULT_CHAT_FRAME:AddMessage("  /tavern " .. name .. (help and (" - " .. help) or ""))
+        end
     end
 end
 ns:RegisterCommand("help", PrintHelp, "show this list")
