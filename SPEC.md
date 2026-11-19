@@ -71,7 +71,7 @@ A guild hub addon for any guild on World of Warcraft: Forever. The guild is read
 
 **The list:** other players' open requests (never your own) where your bags hold the item, or for rule requests any bag item that fits the rule. Columns: item and requester, **needs** (quantity minus received), **you have**, payment (Gift / price). Sorted by what you can fill completely. If you already claimed it, it shows your claim and Fill uses that amount.
 
-**Step 1 is an in-game probe**, because Forever blocked guild chat from a plain button click and might block attaching too: `/tavern mailprobe` (Send Mail tab open) tests filling recipient and subject, splitting a stack and attaching 1 item, and clearing the attachment. It never sends. If attaching is blocked, the fallback fills recipient and subject and shows "attach N × Item" with the item highlighted in your bags, for the player to drag in.
+**Step 1 is an in-game probe**, because Forever blocked guild chat from a plain button click and might block attaching too: `/tavern mailprobe` (Send Mail tab open) tests filling recipient and subject, splitting a stack and attaching 1 item, and clearing the attachment. It never sends. If attaching is blocked, the fallback fills recipient and subject and shows "attach N × Item" with the item highlighted in your bags, for the player to drag in. **Result (2026-11-20):** nothing is blocked from a click. Attachments point at a bag slot (the whole stack in it), so Fill splits the exact amount into an empty slot in a normal bag first, waits for the bag events (not a timer) until nothing is locked, then attaches that slot. Needs one free bag slot per split item.
 
 **Build steps (one commit each, with in-game test steps):**
 1. `/tavern mailprobe` → test in game.
