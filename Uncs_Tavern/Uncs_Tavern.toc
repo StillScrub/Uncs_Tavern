@@ -27,6 +27,7 @@ Modules\GuildLog.lua
 Modules\LevelUp.lua
 Modules\MinimapButton.lua
 Modules\Alerts.lua
+Modules\Mail.lua
 Modules\PvPStats.lua
 Modules\Cheers.lua
 Modules\Milestones.lua
