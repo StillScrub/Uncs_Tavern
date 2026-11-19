@@ -60,13 +60,18 @@ local FIREWORKS = {
     { 8.65, 0.60, 0.88 }, { 8.80, 0.50, 0.58 }, { 8.95, 0.18, 0.86 },
     { 9.10, 0.82, 0.86 }, { 9.25, 0.33, 0.64 }, { 9.40, 0.67, 0.64 },
 }
-local FLAVOUR = "The tavern raises a tankard to a new adventurer!"
 
 local GOLD = { 1, 0.82, 0.2 }
 local PALETTE = {
     { 1, 0.82, 0.2 }, { 1, 0.95, 0.6 }, { 1, 0.35, 0.3 },
     { 0.4, 0.8, 1 }, { 0.5, 1, 0.45 }, { 0.85, 0.5, 1 }, { 1, 1, 1 },
 }
+-- Firework colors per theme (neutral also mixes in the class color).
+local FIREWORK_COLORS = {
+    horde    = { { 1, 0.55, 0.1 }, { 1, 0.3, 0.05 }, { 1, 0.8, 0.25 }, { 0.9, 0.15, 0.05 }, { 1, 0.95, 0.6 } },
+    alliance = { { 1, 0.82, 0.2 }, { 0.3, 0.55, 1 }, { 1, 0.95, 0.7 }, { 0.15, 0.4, 0.95 }, { 1, 1, 1 } },
+}
+local MUG = "|TInterface\\AddOns\\Uncs_Tavern\\Media\\Icon:14:14|t"
 
 local root, showToken = nil, 0
 local loops = {}      -- animation groups that loop (stopped when the show ends)
@@ -200,7 +205,7 @@ local function CreateBanner()
     -- slowly), medal (our art; pops in).
     local crest = CreateFrame("Frame", nil, root)
     crest:SetSize(MEDAL_SIZE, MEDAL_SIZE)
-    crest:SetPoint("BOTTOM", banner, "TOP", 0, -8)
+    crest:SetPoint("BOTTOM", banner, "TOP", 0, 14)
     crest:SetFrameLevel(banner:GetFrameLevel() - 3)
     local glows = CreateFrame("Frame", nil, crest)
     glows:SetAllPoints()
@@ -271,11 +276,6 @@ local function CreateBanner()
     level:SetTextColor(Color(GOLD))
     level:SetPoint("CENTER", banner, "CENTER", 0, -12)
     level:SetText(("has reached level %d!"):format(LEVEL_CAP))
-    local flavour = banner:CreateFontString(nil, "OVERLAY")
-    flavour:SetFont(FONT, 13, "OUTLINE")
-    flavour:SetTextColor(1, 0.93, 0.75)
-    flavour:SetPoint("TOP", banner, "BOTTOM", 0, 12) -- under the plate (its art ends ~8% above the bottom)
-    flavour:SetText(FLAVOUR)
 
     -- Animations: unfurl the plate, pop the medallion, reveal the text.
     local unfurl = banner:CreateAnimationGroup()
@@ -292,14 +292,12 @@ local function CreateBanner()
     Scale(nameIn, 1.4, 1.4, 1, 1, 0.3)
     local levelIn = level:CreateAnimationGroup()
     Alpha(levelIn, 0, 1, 0.4)
-    local flavourIn = flavour:CreateAnimationGroup()
-    Alpha(flavourIn, 0, 1, 0.6)
 
     root.banner, root.crest, root.glows, root.glowIn = banner, medal, glows, glowIn
     root.plate, root.medalArt, root.shimmerMask = plate, art, shimmerMask
-    root.level, root.name, root.classIcon, root.flavour = level, name, classIcon, flavour
-    root.unfurl, root.textIn, root.nameIn, root.levelIn, root.flavourIn, root.glowFlash =
-        unfurl, textIn, nameIn, levelIn, flavourIn, glowFlash
+    root.level, root.name, root.classIcon = level, name, classIcon
+    root.unfurl, root.textIn, root.nameIn, root.levelIn, root.glowFlash =
+        unfurl, textIn, nameIn, levelIn, glowFlash
 end
 
 -- Puts the theme's art in place and fits the name into the plate's text area.
@@ -379,14 +377,22 @@ local function Firework(x, y, r, g, b)
 end
 
 ---------------------------------------------------------------------------
--- Confetti: small colored pieces drifting down and spinning.
+-- Confetti, themed:
+--   neutral   colored paper and sparkles
+--   horde     glowing embers that shrink as they cool, with a few bright sparks
+--   alliance  golden motes of light, white/gold twinkles, blue and gold paper
 ---------------------------------------------------------------------------
+local EMBERS = { { 1, 0.55, 0.1 }, { 1, 0.35, 0.05 }, { 1, 0.75, 0.25 }, { 0.9, 0.2, 0.05 } }
+local LIGHT  = { { 1, 0.85, 0.35 }, { 1, 0.95, 0.7 }, { 1, 1, 1 } }
+local BLUES  = { { 0.15, 0.35, 0.85 }, { 0.3, 0.55, 1 }, { 1, 0.82, 0.2 } }
+
 local function CreateConfetti()
     local t = root:CreateTexture(nil, "ARTWORK", nil, -1)
     t:SetAlpha(0)
     local g = t:CreateAnimationGroup()
     t.move = g:CreateAnimation("Translation")
     t.spin = g:CreateAnimation("Rotation")
+    t.shrink = g:CreateAnimation("Scale")
     Alpha(g, 0, 1, 0.2)
     t.fade = Alpha(g, 1, 0, 0.8)
     g:SetScript("OnFinished", function() t:SetAlpha(0) end)
@@ -394,11 +400,43 @@ local function CreateConfetti()
     return t
 end
 
-local function DropConfetti(t, classColor)
-    local w, h = UIParent:GetWidth(), UIParent:GetHeight()
-    local c = (math.random() < 0.3 and classColor) or PALETTE[math.random(#PALETTE)]
-    local sparkle = math.random() < 0.25
-    if sparkle then
+local function Pick(list) return list[math.random(#list)] end
+
+-- Sets the piece's look; returns color, fall time range and how much it spins/shrinks.
+local function Dress(t, theme, classColor)
+    local roll = math.random()
+    if theme == "horde" then
+        if roll < 0.85 then -- ember: soft glowing dot
+            t:SetTexture(MEDIA .. "Halo")
+            t:SetBlendMode("ADD")
+            local s = math.random(7, 14)
+            t:SetSize(s, s)
+            return Pick(EMBERS), 3.8, 1.8, 0, 0.35
+        end
+        t:SetTexture("Interface\\Cooldown\\star4") -- bright spark
+        t:SetBlendMode("ADD")
+        t:SetSize(10, 10)
+        return { 1, 0.9, 0.5 }, 2.6, 1.0, 360, 0.5
+    elseif theme == "alliance" then
+        if roll < 0.4 then -- mote of light
+            t:SetTexture(MEDIA .. "Halo")
+            t:SetBlendMode("ADD")
+            local s = math.random(8, 13)
+            t:SetSize(s, s)
+            return Pick(LIGHT), 4.0, 1.5, 0, 1
+        elseif roll < 0.7 then -- twinkle
+            t:SetTexture("Interface\\Cooldown\\star4")
+            t:SetBlendMode("ADD")
+            t:SetSize(14, 14)
+            return Pick(LIGHT), 3.5, 1.5, 180, 0.6
+        end
+        t:SetColorTexture(1, 1, 1, 1) -- blue and gold paper
+        t:SetBlendMode("BLEND")
+        t:SetSize(math.random(5, 8), math.random(9, 14))
+        return Pick(BLUES), 3.0, 1.5, 540, 1
+    end
+    local c = (math.random() < 0.3 and classColor) or Pick(PALETTE)
+    if roll < 0.25 then
         t:SetTexture("Interface\\Cooldown\\star4")
         t:SetBlendMode("ADD")
         t:SetSize(14, 14)
@@ -407,14 +445,24 @@ local function DropConfetti(t, classColor)
         t:SetBlendMode("BLEND")
         t:SetSize(math.random(5, 8), math.random(9, 14))
     end
+    return c, 3.0, 1.5, 720, 1
+end
+
+local function DropConfetti(t, classColor, theme)
+    local w, h = UIParent:GetWidth(), UIParent:GetHeight()
+    local c, fallMin, fallRange, spin, endScale = Dress(t, theme, classColor)
     t:SetVertexColor(Color(c))
     t:ClearAllPoints()
     t:SetPoint("CENTER", UIParent, "TOPLEFT", w * (0.1 + math.random() * 0.8), math.random(0, 60))
-    local fall = 3 + math.random() * 1.5
-    t.move:SetOffset((math.random() - 0.5) * 220, -h * (0.55 + math.random() * 0.35))
+    local fall = fallMin + math.random() * fallRange
+    local drift = (theme == "horde") and 120 or 220 -- embers drift less
+    t.move:SetOffset((math.random() - 0.5) * drift, -h * (0.55 + math.random() * 0.35))
     t.move:SetDuration(fall)
-    t.spin:SetDegrees((math.random() < 0.5 and -1 or 1) * math.random(180, 720))
+    t.spin:SetDegrees(spin == 0 and 0 or (math.random() < 0.5 and -1 or 1) * math.random(spin / 4, spin))
     t.spin:SetDuration(fall)
+    t.shrink:SetScaleFrom(1, 1)
+    t.shrink:SetScaleTo(endScale, endScale)
+    t.shrink:SetDuration(fall)
     t.fade:SetStartDelay(fall - 0.8)
     t.group:Stop()
     t.group:Play()
@@ -442,7 +490,7 @@ function Cheers:Stop()
     showToken = showToken + 1
     if not root then return end
     root.fade:Stop()
-    for _, g in ipairs({ root.unfurl, root.textIn, root.glowIn, root.nameIn, root.levelIn, root.flavourIn, root.glowFlash }) do
+    for _, g in ipairs({ root.unfurl, root.textIn, root.glowIn, root.nameIn, root.levelIn, root.glowFlash }) do
         g:Stop()
     end
     for _, g in ipairs(loops) do g:Stop() end
@@ -465,7 +513,8 @@ function Cheers:Play(name, classFile, theme)
 
     root.name:SetText(("Congratulations, %s!"):format(name or "?"))
     root.name:SetTextColor(r, g, b)
-    ApplyTheme(ThemeOf(theme))
+    theme = ThemeOf(theme)
+    ApplyTheme(theme)
     local coords = classFile and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classFile]
     if coords then
         root.classIcon:SetTexCoord(unpack(coords))
@@ -476,11 +525,15 @@ function Cheers:Play(name, classFile, theme)
     root.crest:SetAlpha(0)
     root.name:SetAlpha(0)
     root.level:SetAlpha(0)
-    root.flavour:SetAlpha(0)
     root.banner:ClearAllPoints()
     root.banner:SetPoint("CENTER", UIParent, "TOP", 0, -UIParent:GetHeight() / 3)
     root:SetAlpha(1)
     root:Show()
+
+    -- One line in my own chat (never sent), in case the banner is skipped or missed.
+    -- name comes from my own roster (or is my own), never from a message.
+    DEFAULT_CHAT_FRAME:AddMessage(("%s |cff%02x%02x%02x%s|r has reached level %d!"):format(
+        MUG, math.floor(r * 255), math.floor(g * 255), math.floor(b * 255), name or "?", LEVEL_CAP))
 
     for _, p in ipairs(root.glowParts) do -- debug: /tavern cheers only <part>
         p[2]:SetShown(onlyPart == nil or onlyPart == p[1])
@@ -493,7 +546,6 @@ function Cheers:Play(name, classFile, theme)
     Later(token, 0.6, function() root.glows:SetAlpha(1); root.glowIn:Play() end)
     Later(token, 0.9, function() root.name:SetAlpha(1); root.nameIn:Play(); root.glowFlash:Play() end)
     Later(token, 1.3, function() root.level:SetAlpha(1); root.levelIn:Play() end)
-    Later(token, 1.9, function() root.flavour:SetAlpha(1); root.flavourIn:Play() end)
     for _, at in ipairs({ 3.0, 5.0, 7.0, 9.0 }) do -- the shimmer sweeps again every 2 s
         Later(token, at, function() root.glowFlash:Stop(); root.glowFlash:Play() end)
     end
@@ -502,8 +554,14 @@ function Cheers:Play(name, classFile, theme)
         Later(token, s[1], function() pcall(PlaySound, s[2], "Master") end)
     end
     local classColor = { r, g, b }
+    local themed = FIREWORK_COLORS[theme]
     for i, fw in ipairs(FIREWORKS) do
-        local c = (i % 3 == 0) and classColor or PALETTE[(i - 1) % #PALETTE + 1]
+        local c
+        if themed then
+            c = themed[(i - 1) % #themed + 1]
+        else
+            c = (i % 3 == 0) and classColor or PALETTE[(i - 1) % #PALETTE + 1]
+        end
         Later(token, fw[1], function() Firework(fw[2], fw[3], Color(c)) end)
     end
     -- Confetti in waves; the pool is split in 5 groups used in turn (pieces fall in
@@ -512,7 +570,7 @@ function Cheers:Play(name, classFile, theme)
     for wave, at in ipairs(CONFETTI_WAVES) do
         local first = ((wave - 1) % 5) * perWave
         Later(token, at, function()
-            for i = first + 1, first + perWave do DropConfetti(confetti[i], classColor) end
+            for i = first + 1, first + perWave do DropConfetti(confetti[i], classColor, theme) end
         end)
     end
     Later(token, FADE_AT, function() root.fade:Play() end)
