@@ -232,8 +232,10 @@ end
 -- One list: columns { label, width, flex, fit, get(entry) -> text, r, g, b }
 -- fit = true: the column is as wide as its longest text (header included), at least
 -- `width`, at most FIT_MAX. Flex columns (the item) take whatever is left.
+-- opts (optional): { onClick = fn(entry, mouseButton, row), onEnter = fn(entry, row) }
+-- makes rows clickable / hoverable (with a highlight).
 local FIT_MAX = 180
-local function MakeList(parent, title, cols)
+local function MakeList(parent, title, cols, opts)
     local l = { cols = cols, headers = {} }
     l.frame = CreateFrame("Frame", nil, parent)
     l.title = l.frame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -295,7 +297,21 @@ local function MakeList(parent, title, cols)
                 fs:SetWordWrap(false)
                 row.cells[i] = fs
             end
+            if opts then
+                local hl = row:CreateTexture(nil, "HIGHLIGHT")
+                hl:SetAllPoints()
+                hl:SetColorTexture(1, 0.82, 0, 0.12)
+                row:EnableMouse(true)
+                row:SetScript("OnMouseUp", function(self, button)
+                    if opts.onClick and self.entry then opts.onClick(self.entry, button, self) end
+                end)
+                row:SetScript("OnEnter", function(self)
+                    if opts.onEnter and self.entry then opts.onEnter(self.entry, self) end
+                end)
+                row:SetScript("OnLeave", GameTooltip_Hide)
+            end
         end
+        row.entry = item.e
         if row.version ~= l.version then LayoutRow(row) end
         row.bg:SetShown(item.index % 2 == 0)
         row.icon:SetShown(cols[1].icon ~= nil)

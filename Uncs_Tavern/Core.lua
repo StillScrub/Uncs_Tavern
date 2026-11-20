@@ -165,6 +165,7 @@ local DEFAULTS = {
         minimapButton = true,
         minimapBadge  = true,
         celebrations  = true,
+        enemyTracker  = true,   -- remember enemy players I see (local only, Enemies.lua)
         requestExpiryDays = 14, -- forget other players' requests after this many days unseen
         debug         = false,  -- enables /tavern securitytest
     },
@@ -175,6 +176,8 @@ local DEFAULTS = {
     roster   = {},
     pvp      = {}, -- [guildKey][name] = guildmates' shared PvP stats
     seenItems = {}, -- [itemID] = true, items seen in bags (wishlist search)
+    enemies    = {}, -- [name] = enemy player I've seen, local only (Enemies.lua)
+    enemyIgnore = {}, -- [name] = true: hidden from the PvP tab, not tracked (Enemies.lua)
     milestones = {}, -- [guildKey] = { levels = { [name] = level }, done = { [name] = true } } (Milestones.lua)
     -- Phase B (Permissions.lua, Moderation.lua, GuildLog.lua), all per guild key:
     perms      = {}, -- [guildKey] = { t, mod, log, days, ranks }: rank config from the guild leader

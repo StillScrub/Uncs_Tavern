@@ -260,6 +260,7 @@ local function OnPartyKill(_, attackerGUID, targetGUID)
     if not ok or not mine then return end
 
     local victim = select(6, GetPlayerInfoByGUID(targetGUID)) or "?"
+    ns:Fire("PVP_KILL", victim, targetGUID) -- Enemies.lua: wins per enemy
     local p = Mine()
     p.killingBlows = (p.killingBlows or 0) + 1
     local kill = { name = victim, t = time(), honor = "checking" }
@@ -414,6 +415,7 @@ local function RecordDeath(deathAt)
     k.count = k.count + 1
     k.last = time()
     k.times, k.warned = nil, nil -- left over from the removed farming warning
+    ns:Fire("PVP_DEATH", killer, e.sourceGUID) -- Enemies.lua: losses per enemy
     Changed()
 end
 
