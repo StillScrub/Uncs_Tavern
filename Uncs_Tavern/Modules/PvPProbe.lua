@@ -255,6 +255,19 @@ local function Auras()
         end
         list[#list + 1] = ("%s (spell %s) stacks=%s duration=%s left=%s secret=%s"):format(Safe(a.name), Safe(a.spellId),
             Safe(a.applications), Safe(a.duration), left, Safe(IsSecret(a.name) or IsSecret(a.applications)))
+        -- Tooltip text (to tell apart buffs that share a name, e.g. XP food "Well Fed").
+        local TI = C_TooltipInfo and C_TooltipInfo.GetUnitBuffByAuraInstanceID
+        if TI and a.auraInstanceID and not IsSecret(a.auraInstanceID) then
+            local okT, info = pcall(TI, "player", a.auraInstanceID)
+            if okT and type(info) == "table" and type(info.lines) == "table" then
+                local text = {}
+                for li = 2, #info.lines do
+                    local line = info.lines[li]
+                    if type(line) == "table" and line.leftText then text[#text + 1] = Safe(line.leftText) end
+                end
+                if #text > 0 then list[#list + 1] = "    tooltip: " .. table.concat(text, " / "):sub(1, 160) end
+            end
+        end
     end
     return list
 end
