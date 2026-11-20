@@ -166,6 +166,9 @@ local DEFAULTS = {
         minimapBadge  = true,
         celebrations  = true,
         enemyTracker  = true,   -- remember enemy players I see (local only, Enemies.lua)
+        nearbyWindow  = true,   -- the movable Nearby window (NearbyWindow.lua)
+        nearbyLocked  = false,
+        nearbyHideEmpty = false,
         requestExpiryDays = 14, -- forget other players' requests after this many days unseen
         debug         = false,  -- enables /tavern securitytest
     },

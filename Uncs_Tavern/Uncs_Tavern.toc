@@ -31,6 +31,7 @@ Modules\Mail.lua
 Modules\PvPStats.lua
 Modules\Enemies.lua
 Modules\PvPTab.lua
+Modules\NearbyWindow.lua
 Modules\PvPProbe.lua
 Modules\Cheers.lua
 Modules\Milestones.lua

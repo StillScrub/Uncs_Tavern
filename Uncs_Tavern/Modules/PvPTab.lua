@@ -129,6 +129,10 @@ local function RowMenu(item, button, row)
     end
 end
 
+-- Shared with the Nearby window (NearbyWindow.lua).
+ns.PvPTab = { ShowTooltip = ShowTooltip, RowMenu = RowMenu, ClassColor = ClassColor,
+              LevelText = LevelText, Ago = Ago, Record = Record }
+
 ---------------------------------------------------------------------------
 -- Views
 ---------------------------------------------------------------------------

@@ -315,8 +315,10 @@ end)
 local function UpdateZone()
     local inInstance = Get(IsInInstance)
     local pvpType = Get((C_PvP and C_PvP.GetZonePVPInfo) or GetZonePVPInfo)
+    local was = trackingHere
     trackingHere = not inInstance and pvpType ~= "sanctuary"
     myFaction = Get(UnitFactionGroup, "player") or myFaction
+    if was ~= trackingHere then Notify() end
 end
 
 ns:RegisterEvent("PLAYER_ENTERING_WORLD", UpdateZone)
