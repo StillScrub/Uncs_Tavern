@@ -38,6 +38,7 @@ local function Wipe()
     ns.db.modActions[KEY] = nil
     ns.db.guildLog[KEY] = nil
     ns.db.officerLog[KEY] = nil
+    if ns.db.mailSent then ns.db.mailSent[KEY] = nil end
     local h = ns.charDB.history
     if type(h.byGuild) == "table" then h.byGuild[KEY] = nil end
 end
@@ -107,6 +108,27 @@ local function Run()
     Expect("claim quantity 99999 rejected", W:ClaimedTotal(("%s:%d:%d"):format(ALICE, now, 1001)) == 0)
     Send(BOB, Msg("C", BOB, now, 1001, "WARRIOR", 1, now, 0))
     Expect("claim on your own request rejected", #W:ClaimsFor(("%s:%d:%d"):format(BOB, now, 1001)) == 0)
+
+    -- Mailbox: a sent mail becomes my claim only on the recipient's own requests,
+    -- only for matching items, never more than still needed. (Nothing is mailed here.)
+    if ns.Mail and ns.Mail.TestSent then
+        Send(ALICE, R({ created = now, rand = 4001, qty = 5 }))
+        local mailReq = ("%s:%d:%d"):format(ALICE, now, 4001)
+        ns.Mail:TestSent(BOB, { { itemID = ITEM, count = 5 } })
+        Expect("mail to someone else doesn't claim the request", W:MyClaim(mailReq) == nil)
+        ns.Mail:TestSent(ALICE, { { itemID = 2592, count = 5 } }) -- Wool Cloth, not Linen
+        Expect("mail with a different item doesn't claim the request", W:MyClaim(mailReq) == nil)
+        ns.Mail:TestSent(ALICE, { { itemID = ITEM, count = 99 } })
+        local mc = W:MyClaim(mailReq)
+        Expect(("mail to the requester claims at most what's needed (claimed %s of 5)"):format(mc and mc.qty or 0),
+            mc and mc.qty == 5)
+        ns.db.mailSent = ns.db.mailSent or {}
+        ns.db.mailSent[KEY] = { bad1 = { n = -4, by = ALICE, t = 1 }, bad2 = { n = 2, by = "|cffff0000x|r", t = 1 },
+                                ok = { n = 2, by = ALICE, t = 1 } }
+        ns.Mail:CleanSent()
+        local ms = ns.db.mailSent[KEY] or {}
+        Expect("malformed saved \"already sent\" records dropped", ms.bad1 == nil and ms.bad2 == nil and ms.ok ~= nil)
+    end
 
     -- Helped: only the receiver's confirmation counts
     Send(ALICE, Msg("WH", 500))

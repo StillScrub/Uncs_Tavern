@@ -132,7 +132,8 @@ local function PruneSent()
     end
 end
 
-ns:RegisterCallback("VALIDATE_DB", function()
+-- Drops malformed "already sent" records (saved data is checked like a message).
+function Mail:CleanSent()
     local all = ns.db.mailSent
     if type(all) ~= "table" then ns.db.mailSent = nil return end
     for key, store in pairs(all) do
@@ -148,7 +149,8 @@ ns:RegisterCallback("VALIDATE_DB", function()
             end
         end
     end
-end)
+end
+ns:RegisterCallback("VALIDATE_DB", function() Mail:CleanSent() end)
 
 ---------------------------------------------------------------------------
 -- What my bags can fill
@@ -718,10 +720,9 @@ if SendMail then
     hooksecurefunc("SendMail", function(recipient) OnSendMail(recipient) end)
 end
 
-local function OnSendSuccess()
-    local out = outgoing
-    outgoing = nil
-    if not out then return end
+-- out = { to, items }; quiet = no chat lines (securitytest).
+local function ClaimSent(out, quiet)
+    local Say = quiet and function() end or function(...) ns:Print(...) end
     -- The recipient's open requests, oldest first.
     local reqs = {}
     for _, req in ipairs(W:List("all")) do
@@ -760,20 +761,29 @@ local function OnSendSuccess()
             if qty > 0 and (not cur or qty ~= cur.qty) then
                 local ok, err = W:SetClaim(req.id, qty)
                 if ok then
-                    ns:Print(("Sent %d x %s to %s: marked as on its way."):format(sent, label,
+                    Say(("Sent %d x %s to %s: marked as on its way."):format(sent, label,
                         Ambiguate(req.requester, "guild")))
                 else
-                    ns:Print(("Sent %d x %s to %s (not marked: %s)"):format(sent, label,
+                    Say(("Sent %d x %s to %s (not marked: %s)"):format(sent, label,
                         Ambiguate(req.requester, "guild"), tostring(err)))
                 end
             elseif not cur or qty < want then
-                ns:Print(("Sent %d x %s to %s (others had already claimed the rest)."):format(sent, label,
+                Say(("Sent %d x %s to %s (others had already claimed the rest)."):format(sent, label,
                     Ambiguate(req.requester, "guild")))
             end
         end
     end
     QueueRefresh()
 end
+
+local function OnSendSuccess()
+    local out = outgoing
+    outgoing = nil
+    if out then ClaimSent(out) end
+end
+
+-- /tavern securitytest: what a sent mail would claim (nothing is sent).
+function Mail:TestSent(to, items) ClaimSent({ to = to, items = items }, true) end
 
 ns:RegisterEvent("MAIL_SEND_SUCCESS", OnSendSuccess)
 ns:RegisterEvent("MAIL_FAILED", function() outgoing = nil end)

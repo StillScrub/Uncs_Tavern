@@ -8,7 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Mailbox: Guild Requests panel.** Docked to the right of the mail window, it lists guildmates' open requests you can fill from your bags. **Fill Send Mail** puts in the recipient, subject and exact amount (splitting stacks for you); you press Send yourself. **Fill anyway** when others claimed the rest, **Clear** empties the form.
+- Sent mail to a guildmate with open requests is marked as on its way (your claim) automatically, whether you used Fill or not. Requests your mail fully covers are greyed out until they arrive, and rows show who else is already sending.
+- With Syndicator (comes with Baganator) installed, the panel also shows bank and other-character counts, and requests you could fill after fetching items.
 - Added a little something for those who reach level 60.
+
+### Changed
+- Guild log: delivering more than you claimed now counts as **Confirmed** instead of Mismatch.
+
+### Fixed
+- Raising a claim on a request you had already partly delivered could be refused ("Only N still unclaimed").
 
 ## [0.4.2] - 2026-11-19
 

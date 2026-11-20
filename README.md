@@ -44,9 +44,15 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 - **Auto-complete:** items you take from the mailbox count toward your requests automatically; the **Got** button fixes counts for trades or gathered items. Finished requests disappear for everyone.
 - Requests and claims **sync across the guild**, live and on login. Only the owner ever sends their own requests and claims (nothing is passed along by others), so you see a request once its owner has been online at the same time as you.
 
+**Mailbox: Guild Requests**
+- At the mailbox, a **Guild Requests** panel docks to the right of the mail window: guildmates' open requests you can fill from your bags, with how many they still need, how many you have, and the payment.
+- Pick one and click **Fill Send Mail**: the recipient, subject and exact amount are filled into Blizzard's Send Mail form (stacks are split for you; needs one free bag slot). You check it and press **Send** yourself. **Fill anyway** works when others have claimed the rest; **Clear** empties the form.
+- When the mail goes out it's marked as on its way (your claim), and requests your mail fully covers are greyed out so you don't send twice. Rows show who else is already sending.
+- With [Syndicator](https://www.curseforge.com/wow/addons/syndicator) (comes with Baganator) installed, rows also show how many you have in your bank and on your other characters.
+
 **History tab**
 - Your own **Items received** and **Items sent** through the wishlist (only you see it).
-- **Guild log:** every delivery in the guild marked **Confirmed** (helper and receiver agree), **Unconfirmed** (only one side) or **Mismatch** (in red), plus moderator actions.
+- **Guild log:** every delivery in the guild marked **Confirmed** (helper and receiver agree), **Unconfirmed** (only one side) or **Mismatch** (in red: less arrived than was claimed), plus moderator actions.
 - **Officer log** (ranks the guild leader allows): moderator actions with reasons, and every mismatch.
 
 **Rank permissions** (Settings > Guild > Permissions)
