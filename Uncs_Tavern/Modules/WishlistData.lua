@@ -592,9 +592,12 @@ function Wishlist:SetClaim(reqId, qty)
     qty = tonumber(qty)
     if not qty or qty < 0 then return nil, "Enter a number (0 cancels your claim)." end
     qty = math.floor(qty)
-    local max = self:Unclaimed(req, true)
-    if qty > max then return nil, ("Only %d still unclaimed."):format(max) end
     local me = ns:PlayerName()
+    -- A claim's qty includes what I've already delivered (ClaimOutstanding subtracts it),
+    -- so the limit is what's unclaimed plus my own deliveries.
+    local delivered = req.receivedFrom and req.receivedFrom[me] or 0
+    local max = self:Unclaimed(req, true) + delivered
+    if qty > max then return nil, ("Only %d still unclaimed."):format(max - delivered) end
     local id = reqId .. "#" .. me
     local cur = claims[id]
     if qty == 0 and not cur then return nil, "You have no claim on this request." end
