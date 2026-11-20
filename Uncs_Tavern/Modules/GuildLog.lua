@@ -8,7 +8,8 @@
 --   Status:  Confirmed    both sides agree
 --            Unconfirmed  only one side (a confirmation without a claim, or a claim that
 --                         lapsed / whose request closed with nothing confirmed)
---            Mismatch     the confirmed quantity differs from the claim (shown in red)
+--            Mismatch     less was confirmed than claimed, and the claim lapsed or the
+--                         request closed (shown in red). More than claimed = Confirmed.
 --   (A COD check is planned with the mailbox panel: COD mail is broken on the server.)
 --   Moderator actions come from Moderation.lua after its rank check.
 --
@@ -65,8 +66,10 @@ local function Status(req, claim, got)
     local settled = not W:IsOpen(req) or (claim and not W:IsClaimActive(claim))
     if got > 0 and not claim then return "Unconfirmed" end
     if got == 0 then return settled and "Unconfirmed" or nil end -- still on its way
-    if got == claim.qty then return "Confirmed" end
-    if got > claim.qty or settled then return "Mismatch" end
+    -- More than claimed is fine (e.g. "Fill anyway" when others had claimed the rest, so
+    -- the claim was capped): the requester got at least what was promised.
+    if got >= claim.qty then return "Confirmed" end
+    if settled then return "Mismatch" end
     return nil -- part delivered, rest still on its way
 end
 
