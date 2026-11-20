@@ -29,6 +29,7 @@ Modules\MinimapButton.lua
 Modules\Alerts.lua
 Modules\Mail.lua
 Modules\PvPStats.lua
+Modules\PvPProbe.lua
 Modules\Cheers.lua
 Modules\Milestones.lua
 Modules\SecurityTest.lua
