@@ -12,7 +12,8 @@
 -- WINS / LOSSES: PvPStats fires PVP_KILL (my killing blow on a player) and PVP_DEATH
 -- (a player's killing blow on me, from the death recap); duels are already left out there.
 --
--- NEARBY: enemies seen in the last NEARBY_SECONDS this session (session memory only).
+-- NEARBY: enemies in view right now (a nameplate, or my target / focus / mouseover),
+-- kept NEARBY_SECONDS after they drop out of view so they don't flicker (session memory only).
 --
 -- IGNORE LIST (ns.db.enemyIgnore): ignored players are hidden from the PvP tab and no
 -- longer updated (later: never alerted on). Their old record is kept for un-ignoring.
@@ -26,7 +27,7 @@ local Enemies = {}
 ns.Enemies = Enemies
 
 local MAX_ENEMIES     = 1000   -- oldest (by last seen) dropped beyond this
-local NEARBY_SECONDS  = 120
+local NEARBY_SECONDS  = 15     -- grace after leaving view
 local RESEEN_THROTTLE = 10
 local ENCOUNTER_GAP   = 600    -- 10 minutes
 local NOTIFY_DELAY    = 0.5
@@ -173,6 +174,12 @@ local function RefreshPlates()
     for _, plate in ipairs(plates) do
         local unit = plate.namePlateUnitToken
         if unit and IsEnemyPlayer(unit) then
+            local name = FullName(unit)
+            if name and nearby[name] then nearby[name] = nowT end
+        end
+    end
+    for _, unit in ipairs({ "target", "focus", "mouseover" }) do
+        if Get(UnitExists, unit) and IsEnemyPlayer(unit) then
             local name = FullName(unit)
             if name and nearby[name] then nearby[name] = nowT end
         end
@@ -324,6 +331,10 @@ end
 ns:RegisterEvent("PLAYER_ENTERING_WORLD", UpdateZone)
 ns:RegisterEvent("ZONE_CHANGED_NEW_AREA", UpdateZone)
 ns:RegisterEvent("NAME_PLATE_UNIT_ADDED", function(_, unit) Note(unit) end)
+-- A plate gone: once the grace time is over, tell the lists so they drop that enemy.
+ns:RegisterEvent("NAME_PLATE_UNIT_REMOVED", function()
+    if trackingHere and Enemies:Enabled() then C_Timer.After(NEARBY_SECONDS + 1, Notify) end
+end)
 ns:RegisterEvent("PLAYER_TARGET_CHANGED", function() Note("target") end)
 ns:RegisterEvent("UPDATE_MOUSEOVER_UNIT", function() Note("mouseover") end)
 ns:RegisterEvent("PLAYER_FOCUS_CHANGED", function() Note("focus") end)

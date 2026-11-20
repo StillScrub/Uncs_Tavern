@@ -77,7 +77,7 @@ end
 ---------------------------------------------------------------------------
 -- Row actions
 ---------------------------------------------------------------------------
-local function ShowTooltip(item, row)
+local function ShowTooltip(item, row, hint)
     local e = item.e or {}
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
     local c = ClassColor(e)
@@ -110,7 +110,7 @@ local function ShowTooltip(item, row)
     end
     if e.first then Line("First seen", date("%b %d %Y", e.first)) end
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Right-click for options.", 0.5, 0.5, 0.5, true)
+    GameTooltip:AddLine(hint or "Right-click for options.", 0.5, 0.5, 0.5, true)
     GameTooltip:Show()
 end
 
@@ -159,12 +159,11 @@ ns.PvPTab = { ShowTooltip = ShowTooltip, RowMenu = RowMenu, ClassColor = ClassCo
 local function NearbyEmpty()
     if not Enemies:Enabled() then return "Enemy tracking is off (Settings > PvP)." end
     if not Enemies:TrackingHere() then return "Not tracking here (dungeons, battlegrounds and sanctuaries)." end
-    return ("No enemy players seen in the last %d minutes. Turn on enemy nameplates (Shift+V) to spot more.")
-        :format(Enemies.NEARBY_SECONDS / 60)
+    return "No enemy players in view. Turn on enemy nameplates (Shift+V) to spot more."
 end
 
 local INTROS = {
-    nearby  = "Enemy players seen in the last 2 minutes. Only you see this.",
+    nearby  = "Enemy players in view right now. Only you see this.",
     enemies = "Every enemy player you've seen, with your kills and deaths against them. Only you see this.",
     ignored = "Ignored players are hidden and not tracked. Right-click to stop ignoring.",
     kos     = "The guild's Kill on Sight list: everyone's entries together. Entries last 30 days unless renewed.",
@@ -245,7 +244,6 @@ local function Build(p)
 
     lists.nearby = History.MakeList(panel, "Nearby", {
         nameCol(), levelCol(), guildCol(), recordCol(),
-        { label = "Seen", width = 60, fit = true, get = function(i) return Ago(i.ago), GREY end },
     }, opts)
     lists.enemies = History.MakeList(panel, "Enemies", {
         nameCol(), levelCol(), guildCol(), recordCol(),

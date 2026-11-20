@@ -3,8 +3,10 @@
 -- Stays on screen like other trackers (no need to open the Unc's Tavern window).
 -- Reads Enemies.lua only; nothing is sent.
 --   Drag to move (unless locked); the position is saved per character (charDB.nearbyPos).
---   Rows: class-colored name, level, seconds since seen. Hover = details,
---   right-click a row = ignore / forget (same menu as the PvP tab).
+--   Rows: class-colored name and level of enemies in view right now. Hover = details,
+--   click = target, double-click = our own skull over their nameplate (PlateMarks),
+--   right-click a row = ignore / forget / KOS (same menu as the PvP tab).
+--   In combat the rows can't be re-targeted, so the list is redrawn after combat.
 --   Right-click the title = window options. The X hides it (/tavern nearby brings it back).
 -- Updates on ENEMIES_CHANGED, plus a ticker every REFRESH seconds while it shows enemies
 -- (they age out of "nearby" without any game event).
@@ -68,12 +70,41 @@ end
 ---------------------------------------------------------------------------
 -- Frame
 ---------------------------------------------------------------------------
+local ROW_HINT = "Click: target.  Double-click: skull over their nameplate (only you see it).  Right-click: options."
+local DOUBLE_CLICK = 0.4
+
+-- Runs after the secure click (its macro has already run).
+-- Raid marks can't go on enemy players on Forever, so double-click toggles our own
+-- skull over their nameplate instead (PlateMarks.lua; no protected calls, works in combat).
+local function RowPostClick(self, button, down)
+    if down or not self.item then return end
+    if button == "RightButton" then
+        if Tab() then Tab().RowMenu(self.item, button, self) end
+        return
+    end
+    if button ~= "LeftButton" then return end
+    local name, now = self.item.name, GetTime()
+    if self.lastName == name and now - (self.lastClick or 0) <= DOUBLE_CLICK then
+        self.lastClick = nil
+        ns.PlateMarks:Toggle(name)
+        Update()
+    else
+        self.lastName, self.lastClick = name, now
+    end
+end
+
+-- Rows are secure buttons: left-click runs "/targetexact <name>" (targeting is a protected
+-- action, so only a secure button can do it). Secure attributes can't change in combat,
+-- so in combat the rows keep their names and the list is redrawn when combat ends.
 local function CreateRow(i)
-    local r = CreateFrame("Button", nil, frame)
+    local r = CreateFrame("Button", "UncsTavernNearbyRow" .. i, frame, "SecureActionButtonTemplate")
     r:SetHeight(ROW_H)
     r:SetPoint("TOPLEFT", frame, "TOPLEFT", 6, -(TITLE_H + (i - 1) * ROW_H))
     r:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -6, -(TITLE_H + (i - 1) * ROW_H))
-    r:RegisterForClicks("RightButtonUp")
+    -- Both up and down: the secure handler acts on whichever one the
+    -- "cast on key down" option selects.
+    r:RegisterForClicks("AnyUp", "AnyDown")
+    r:SetAttribute("type1", "macro")
     r.bar = r:CreateTexture(nil, "BACKGROUND")
     r.bar:SetAllPoints()
     r.bar:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
@@ -88,10 +119,10 @@ local function CreateRow(i)
     r.name:SetPoint("RIGHT", r.right, "LEFT", -6, 0)
     r.name:SetJustifyH("LEFT")
     r.name:SetWordWrap(false)
-    r:SetScript("OnClick", function(self, button)
-        if self.item and Tab() then Tab().RowMenu(self.item, button, self) end
+    r:SetScript("PostClick", RowPostClick)
+    r:SetScript("OnEnter", function(self)
+        if self.item and Tab() then Tab().ShowTooltip(self.item, self, ROW_HINT) end
     end)
-    r:SetScript("OnEnter", function(self) if self.item and Tab() then Tab().ShowTooltip(self.item, self) end end)
     r:SetScript("OnLeave", GameTooltip_Hide)
     -- Rows don't block dragging the window.
     r:RegisterForDrag("LeftButton")
@@ -117,9 +148,15 @@ local function Create()
     frame:SetBackdropColor(0, 0, 0, 0.75)
     frame:SetBackdropBorderColor(0.7, 0.55, 0.3, 0.9)
     frame:SetScript("OnDragStart", function(self)
-        if not S().nearbyLocked then self:StartMoving() end
+        -- The window holds secure rows, so it can't move in combat.
+        if not S().nearbyLocked and not InCombatLockdown() then
+            self.moving = true
+            self:StartMoving()
+        end
     end)
     frame:SetScript("OnDragStop", function(self)
+        if not self.moving then return end
+        self.moving = nil
         self:StopMovingOrSizing()
         SavePosition()
     end)
@@ -177,7 +214,48 @@ local function StopTicker()
     if ticker then ticker:Cancel() ticker = nil end
 end
 
+local pending = false -- a full redraw is waiting for combat to end
+
+local function RowRight(tab, item)
+    local lvl = tab.LevelText(item.e)
+    return lvl ~= "" and ("Lvl " .. lvl) or ""
+end
+
+-- In combat: no showing, hiding, resizing or re-targeting rows. Refresh the
+-- text of the names already shown; dim the ones that left; count the new ones.
+local function CombatRefresh()
+    local tab = Tab()
+    if not (frame and frame:IsShown() and tab) then return end
+    local list = Enemies:TrackingHere() and Enemies:Nearby() or {}
+    local byName = {}
+    for _, item in ipairs(list) do byName[item.name] = item end
+    local onRows = 0
+    for _, r in ipairs(rows) do
+        if r.item and r:IsShown() then
+            local item = byName[r.item.name]
+            if item then
+                onRows = onRows + 1
+                r.item = item
+                r.name:SetAlpha(1)
+                r.right:SetText(RowRight(tab, item))
+            else
+                r.name:SetAlpha(0.4)
+                r.right:SetText("|cff999999gone|r")
+            end
+        end
+    end
+    local extra = #list - onRows
+    frame.title:SetText(("Nearby enemies (%d)%s"):format(#list,
+        extra > 0 and ("  |cffff8040+%d after combat|r"):format(extra) or ""))
+end
+
 function Update()
+    if InCombatLockdown() then
+        pending = true
+        CombatRefresh()
+        return
+    end
+    pending = false
     local want = ns.db and S().nearbyWindow and Enemies:Enabled()
     if not want then
         StopTicker()
@@ -202,11 +280,19 @@ function Update()
         if item and tab then
             local c = tab.ClassColor(item.e)
             r.bar:SetVertexColor(c.r, c.g, c.b, 0.35)
-            r.name:SetText(tab.DisplayName(item.name))
-            local lvl = tab.LevelText(item.e)
-            r.right:SetText(("%s  |cff999999%s|r"):format(lvl ~= "" and lvl or "", tab.Ago(item.ago)))
+            local skull = ns.PlateMarks:Skull() == item.name
+                and "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_8:0|t " or ""
+            r.name:SetText(skull .. tab.DisplayName(item.name))
+            r.name:SetAlpha(1)
+            r.right:SetText(RowRight(tab, item))
+            -- Names come from the game's own unit names; strip line breaks anyway
+            -- so nothing can add a second macro line.
+            r.macro = "/targetexact " .. item.name:gsub("[\r\n]", "")
+            r:SetAttribute("macrotext1", r.macro)
             r:Show()
         else
+            r.macro = nil
+            r:SetAttribute("macrotext1", nil)
             r:Hide()
         end
     end
@@ -232,6 +318,7 @@ end
 ns:RegisterCallback("ENEMIES_CHANGED", function() Update() end)
 ns:RegisterCallback("KOS_CHANGED", function() if frame and frame:IsShown() then Update() end end)
 ns:RegisterEvent("PLAYER_ENTERING_WORLD", function() C_Timer.After(1, Update) end)
+ns:RegisterEvent("PLAYER_REGEN_ENABLED", function() if pending then Update() end end)
 
 ---------------------------------------------------------------------------
 -- Settings > PvP and /tavern nearby
