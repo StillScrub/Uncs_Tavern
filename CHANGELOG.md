@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a little something for those who reach level 60.
 
 ### Changed
+- The "items in your bags are on the guild wishlist" popup now shows only at vendors and the auction house; at the mailbox, the Guild Requests panel shows them instead.
 - Guild log: delivering more than you claimed now counts as **Confirmed** instead of Mismatch.
 
 ### Fixed

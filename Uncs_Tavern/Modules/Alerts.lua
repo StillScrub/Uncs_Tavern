@@ -3,7 +3,7 @@
 --   * Tooltip lines: on any item tooltip, "Wanted by <name>: N more · price" for every
 --     open request the item fits (item requests and rule requests). Your own requests
 --     show as "On your wishlist: N more".
---   * Popup once per login, the first time you open a vendor, auction house or mailbox
+--   * Popup once per login, the first time you open a vendor or the auction house
 --     with items in your bags that are on the guild wishlist: "N items in your bags are
 --     on the guild wishlist", listing them, with Show me / Ignore forever (the X just
 --     closes it). It sits at the top of the screen and never blocks selling.
@@ -217,9 +217,9 @@ local function HidePopup()
     if popup then popup:Hide() end
 end
 
--- A moment after the window opens, so the vendor/AH/mail frame is up first.
+-- A moment after the window opens, so the vendor/AH frame is up first. (Not at the
+-- mailbox: the Guild Requests panel, Modules\Mail.lua, shows the same there.)
 local function OnOpen() C_Timer.After(0.3, ShowPopup) end
-ns:RegisterEvent("MAIL_SHOW", OnOpen)
 ns:RegisterEvent("AUCTION_HOUSE_SHOW", OnOpen)
 
 ---------------------------------------------------------------------------
@@ -443,7 +443,7 @@ ns.Settings:RegisterToggle({
     category = "alerts",
     key = "vendorPopup",
     label = "Wishlist reminder popup",
-    description = "Once per login, at a vendor, the auction house or the mailbox: a popup when items in your bags are on the guild wishlist. Never blocks selling.",
+    description = "Once per login, at a vendor or the auction house: a popup when items in your bags are on the guild wishlist. Never blocks selling.",
     order = 41,
     onChange = function(v) if not v then HidePopup() end end,
 })

@@ -60,7 +60,7 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 
 **Alerts**
 - Item tooltips show who in the guild wants an item ("Wanted by <name>: N more · price").
-- Once per login, a popup at vendors, the auction house or the mailbox lists bag items that fill guildmates' requests (**Ignore forever** turns it off). Selling one warns you and points to the Buyback tab.
+- Once per login, a popup at vendors or the auction house lists bag items that fill guildmates' requests (**Ignore forever** turns it off). Selling one warns you and points to the Buyback tab.
 - Requests from players who left or were kicked from the guild disappear right away.
 - A red warning when a guildmate's mail asks more COD than your wishlist price for those items.
 - A badge on the minimap button counts new requests until you open the Wishlist tab.
