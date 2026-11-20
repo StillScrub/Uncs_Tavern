@@ -38,6 +38,7 @@ local function Wipe()
     ns.db.modActions[KEY] = nil
     ns.db.guildLog[KEY] = nil
     ns.db.officerLog[KEY] = nil
+    ns.db.kos[KEY] = nil
     if ns.db.mailSent then ns.db.mailSent[KEY] = nil end
     local h = ns.charDB.history
     if type(h.byGuild) == "table" then h.byGuild[KEY] = nil end
@@ -207,6 +208,51 @@ local function Run()
     Send(LEADER, Msg("OM", "D", ALICE, now, 3001, "", now, "duplicate item spam"), "WHISPER")
     local note = ns.GuildLog:GetOfficer(officerId)
     Expect("officer note from the guild leader by whisper accepted", note and note.reason == "duplicate item spam")
+
+    -- Kill on Sight: 2|KS|target|class|level|guild|rc|reason|t|deleted|updated
+    if ns.KOS then
+        local K = ns.KOS
+        local function KS(target, o)
+            o = o or {}
+            return Msg("KS", target, o.class or "ROGUE", o.level or 35, o.guild or "", o.rc or 1, o.reason or "",
+                o.t or now, o.deleted or 0, o.updated or now)
+        end
+        local function Kos(adder, target) local b = ns.db.kos[KEY] return b and b[adder .. "#" .. target] end
+        Send(ALICE, KS("Enemy One"))
+        Expect("valid Kill on Sight entry from its adder accepted", Kos(ALICE, "Enemy One") ~= nil and K:IsKOS("Enemy One"))
+        Send(ALICE, KS(BOB))
+        Expect("guild member can't be put on Kill on Sight", Kos(ALICE, BOB) == nil)
+        Send(ALICE, KS(ALICE))
+        Expect("putting yourself on Kill on Sight rejected", Kos(ALICE, ALICE) == nil)
+        Send(ALICE, KS("Enemy Two", { level = 999 }))
+        Expect("Kill on Sight level 999 rejected", Kos(ALICE, "Enemy Two") == nil)
+        Send(ALICE, KS("Enemy Three", { class = "HACKER" }))
+        Expect("Kill on Sight unknown class rejected", Kos(ALICE, "Enemy Three") == nil)
+        Send(ALICE, KS("Enemy Four", { rc = 99 }))
+        Expect("Kill on Sight unknown reason preset rejected", Kos(ALICE, "Enemy Four") == nil)
+        Send(ALICE, KS("Enemy Five", { t = now + 86400 * 30, updated = now + 86400 * 30 }))
+        Expect("Kill on Sight timestamp in the future rejected", Kos(ALICE, "Enemy Five") == nil)
+        Send(ALICE, KS("Enemy Six", { rc = 0, reason = string.rep("x", 150) }))
+        local six = Kos(ALICE, "Enemy Six")
+        Expect("Kill on Sight reason cut to " .. K.MAX_REASON .. " characters", six and #(six.reason or "") <= K.MAX_REASON)
+        K:Merge(ALICE, "Enemy Seven", "ROGUE", 30, "|cffff0000Evil|r", 0, "|Hitem:19019|h[Thunderfury]|h %s", now, 0, now)
+        local seven = Kos(ALICE, "Enemy Seven")
+        Expect("escape codes stripped from Kill on Sight reason and guild",
+            seven and not (seven.reason or ""):find("|", 1, true) and not (seven.guild or ""):find("|", 1, true))
+        Send(BOB, KS("Enemy One", { deleted = 1, updated = now + 5 }))
+        Expect("someone else can't remove your Kill on Sight entry", K:IsKOS("Enemy One")
+            and not (Kos(ALICE, "Enemy One") or {}).deleted)
+        Send(ALICE, KS("Enemy One", { deleted = 1, updated = now + 5 }))
+        Expect("adder can remove their own Kill on Sight entry", (Kos(ALICE, "Enemy One") or {}).deleted == true)
+        local kosAccepted = 0
+        for i = 1, K.MAX_PER_PLAYER + 1 do
+            if K:Merge(BOB, "Target " .. i, "MAGE", 30, "", 1, "", now, 0, now) then kosAccepted = kosAccepted + 1 end
+        end
+        Expect(("max %d Kill on Sight entries per player (accepted %d of %d)"):format(K.MAX_PER_PLAYER, kosAccepted,
+            K.MAX_PER_PLAYER + 1), kosAccepted == K.MAX_PER_PLAYER)
+        Send(MALLORY, KS("Enemy Eight"))
+        Expect("Kill on Sight entry from a non-guildie rejected", Kos(MALLORY, "Enemy Eight") == nil)
+    end
 
     -- Unknown types and floods
     before = Comm.stats.accepted

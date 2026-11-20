@@ -181,6 +181,7 @@ local DEFAULTS = {
     seenItems = {}, -- [itemID] = true, items seen in bags (wishlist search)
     enemies    = {}, -- [name] = enemy player I've seen, local only (Enemies.lua)
     enemyIgnore = {}, -- [name] = true: hidden from the PvP tab, not tracked (Enemies.lua)
+    kos        = {}, -- [guildKey][adder#target] = Kill on Sight entries (KOS.lua)
     milestones = {}, -- [guildKey] = { levels = { [name] = level }, done = { [name] = true } } (Milestones.lua)
     -- Phase B (Permissions.lua, Moderation.lua, GuildLog.lua), all per guild key:
     perms      = {}, -- [guildKey] = { t, mod, log, days, ranks }: rank config from the guild leader

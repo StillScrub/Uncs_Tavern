@@ -20,6 +20,7 @@ local WHAT = {
     wishlist = "your wishlist requests (item or rule, quantity, price, note), your claims, and what you've received",
     pvp      = "your honorable kills, deaths to players, dishonorable kills/deaths, killing blows and \"Most killed by\"",
     helped   = "who delivered items to you (counts toward their Helped and your History)",
+    kos      = "the enemy players you put on the guild Kill on Sight list, with your reason",
 }
 
 ---------------------------------------------------------------------------
@@ -57,6 +58,7 @@ local function CreatePopup()
         .. "  - " .. WHAT.wishlist .. "\n"
         .. "  - " .. WHAT.pvp .. "\n"
         .. "  - " .. WHAT.helped .. "\n"
+        .. "  - " .. WHAT.kos .. "\n"
         .. "  - moderator actions (if your rank may moderate) and, for the guild leader, the rank permissions\n\n"
         .. "|cff999999Never shared: your bags, gold, mail, or which characters are yours. "
         .. "You can switch each part off in Settings.|r")
@@ -114,12 +116,13 @@ local function DeleteGuildData()
     ns.db.modActions[key] = nil
     ns.db.guildLog[key] = nil
     ns.db.officerLog[key] = nil
+    ns.db.kos[key] = nil
     local h = ns.charDB.history
     if type(h.byGuild) == "table" then h.byGuild[key] = nil end
     ns:Fire("WISHLIST_CHANGED", nil, "remote")
     ns:Fire("PVP_STATS_CHANGED")
     ns:Fire("HISTORY_CHANGED")
-    ns:Fire("GUILD_CHANGED", key) -- caches (Helped) rebuild
+    ns:Fire("GUILD_CHANGED", key) -- caches (Helped, Kill on Sight) rebuild
     ns:Print(("Deleted the saved data for %s on this account (your own requests too). "
         .. "Your other characters' History for this guild is kept until you delete it on them."):format(GuildName()))
 end
@@ -128,7 +131,7 @@ end
 local function ConfirmDelete()
     ns.Dialog:Show({
         text = ("|cffff4040Delete everything saved for %s?|r\n"
-            .. "Wishlist requests (yours too), claims, PvP stats, Helped and this character's History.\n\n"
+            .. "Wishlist requests (yours too), claims, PvP stats, Kill on Sight entries, Helped and this character's History.\n\n"
             .. "This can't be undone. If sharing stays on, guildmates' data comes back as they log in.")
             :format(GuildName()),
         accept = "Delete",
@@ -193,7 +196,7 @@ ns.Settings:RegisterButton({
     category = "sharing", order = 7,
     label = "Delete this guild's data",
     buttonText = "Delete",
-    description = "Removes this guild's wishlist, claims, PvP stats and Helped from this account, and this character's History. Asks first.",
+    description = "Removes this guild's wishlist, claims, PvP stats, Kill on Sight list and Helped from this account, and this character's History. Asks first.",
     disabled = function() return not ns:GuildKey() end,
     onClick = ConfirmDelete,
 })

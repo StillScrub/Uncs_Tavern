@@ -202,7 +202,7 @@ function Update()
         if item and tab then
             local c = tab.ClassColor(item.e)
             r.bar:SetVertexColor(c.r, c.g, c.b, 0.35)
-            r.name:SetText(item.name)
+            r.name:SetText(tab.DisplayName(item.name))
             local lvl = tab.LevelText(item.e)
             r.right:SetText(("%s  |cff999999%s|r"):format(lvl ~= "" and lvl or "", tab.Ago(item.ago)))
             r:Show()
@@ -230,6 +230,7 @@ function Update()
 end
 
 ns:RegisterCallback("ENEMIES_CHANGED", function() Update() end)
+ns:RegisterCallback("KOS_CHANGED", function() if frame and frame:IsShown() then Update() end end)
 ns:RegisterEvent("PLAYER_ENTERING_WORLD", function() C_Timer.After(1, Update) end)
 
 ---------------------------------------------------------------------------

@@ -8,4 +8,7 @@
     <Binding name="UNCSTAVERN_TOGGLE" header="UNCSTAVERN" category="ADDONS">
         SlashCmdList.UNCSTAVERN("")
     </Binding>
+    <Binding name="UNCSTAVERN_KOS" category="ADDONS">
+        SlashCmdList.UNCSTAVERN("kos")
+    </Binding>
 </Bindings>

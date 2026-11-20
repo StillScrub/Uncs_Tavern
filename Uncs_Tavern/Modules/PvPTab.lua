@@ -20,7 +20,7 @@ local views = {
     { key = "nearby",  label = "Nearby" },
     { key = "enemies", label = "Enemies" },
     { key = "ignored", label = "Ignored" },
-    { key = "kos",     label = "Kill on Sight", soon = true },
+    { key = "kos",     label = "Kill on Sight" },
     { key = "board",   label = "Leaderboard", soon = true },
 }
 
@@ -34,6 +34,12 @@ local GREEN = { r = 0.4, g = 1, b = 0.4 }
 local function ClassColor(e)
     local c = e and e.class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[e.class]
     return c or HIGHLIGHT_FONT_COLOR
+end
+
+-- Name with a skull in front when the player is on the guild Kill on Sight list.
+local function DisplayName(name)
+    if ns.KOS and ns.KOS:IsKOS(name) then return ns.KOS.SKULL .. " " .. name end
+    return name
 end
 
 local function LevelText(e)
@@ -83,6 +89,16 @@ local function ShowTooltip(item, row)
     if ClassName(e) then parts[#parts + 1] = ClassName(e) end
     if #parts > 0 then GameTooltip:AddLine(table.concat(parts, " "), 1, 1, 1) end
     if e.guild then GameTooltip:AddLine("<" .. e.guild .. ">", 0.6, 1, 0.6) end
+    local kos = ns.KOS and ns.KOS:Entries(item.name)
+    if kos then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine(ns.KOS.SKULL .. " Guild Kill on Sight", 1, 0.3, 0.3)
+        for _, k in ipairs(kos) do
+            local reason = ns.KOS:ReasonText(k)
+            GameTooltip:AddDoubleLine(k.adder .. "  |cff808080" .. date("%b %d", k.t) .. "|r",
+                reason ~= "" and reason or "no reason given", 0.9, 0.9, 0.9, 1, 0.82, 0)
+        end
+    end
     GameTooltip:AddLine(" ")
     local function Line(label, value)
         GameTooltip:AddDoubleLine(label, value, 0.8, 0.8, 0.8, 1, 1, 1)
@@ -94,7 +110,7 @@ local function ShowTooltip(item, row)
     end
     if e.first then Line("First seen", date("%b %d %Y", e.first)) end
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Right-click for options. Only you see this list.", 0.5, 0.5, 0.5, true)
+    GameTooltip:AddLine("Right-click for options.", 0.5, 0.5, 0.5, true)
     GameTooltip:Show()
 end
 
@@ -112,6 +128,10 @@ local function RowMenu(item, button, row)
     if MenuUtil and MenuUtil.CreateContextMenu then
         MenuUtil.CreateContextMenu(row, function(_, root)
             root:CreateTitle(name)
+            if ns.KOS and not ignored then
+                ns.KOS:FillMenu(root, name, item.e)
+                root:CreateDivider()
+            end
             if ignored then
                 root:CreateButton("Stop ignoring", function() Enemies:SetIgnored(name, false) end)
             else
@@ -130,7 +150,7 @@ local function RowMenu(item, button, row)
 end
 
 -- Shared with the Nearby window (NearbyWindow.lua).
-ns.PvPTab = { ShowTooltip = ShowTooltip, RowMenu = RowMenu, ClassColor = ClassColor,
+ns.PvPTab = { ShowTooltip = ShowTooltip, RowMenu = RowMenu, ClassColor = ClassColor, DisplayName = DisplayName,
               LevelText = LevelText, Ago = Ago, Record = Record }
 
 ---------------------------------------------------------------------------
@@ -147,7 +167,7 @@ local INTROS = {
     nearby  = "Enemy players seen in the last 2 minutes. Only you see this.",
     enemies = "Every enemy player you've seen, with your kills and deaths against them. Only you see this.",
     ignored = "Ignored players are hidden and not tracked. Right-click to stop ignoring.",
-    kos     = "The guild's Kill on Sight list.",
+    kos     = "The guild's Kill on Sight list: everyone's entries together. Entries last 30 days unless renewed.",
     board   = "This week's guild PvP leaderboard.",
 }
 
@@ -189,6 +209,10 @@ function Refresh()
         lists.enemies:SetEntries(all, Enemies:Enabled() and "No enemy players seen yet." or "Enemy tracking is off (Settings > PvP).")
     elseif current == "ignored" then
         lists.ignored:SetEntries(Enemies:Ignored(), "Nobody ignored. Right-click a player in Nearby or Enemies to ignore them.")
+    elseif current == "kos" then
+        local empty = not ns:GuildKey() and "Join a guild to use the Kill on Sight list."
+            or "Nobody on Kill on Sight yet. Right-click an enemy (here, in the Nearby window or on their portrait) to add them."
+        lists.kos:SetEntries(ns.KOS:Targets(), empty)
     end
     UpdateTicker()
 end
@@ -212,7 +236,7 @@ local function Build(p)
 
     local opts = { onClick = RowMenu, onEnter = ShowTooltip }
     local nameCol = function() return { label = "Name", width = 120, flex = 1,
-        get = function(i) return i.name, ClassColor(i.e) end } end
+        get = function(i) return DisplayName(i.name), ClassColor(i.e) end } end
     local levelCol = function() return { label = "Lvl", width = 36, get = function(i) return LevelText(i.e) end } end
     local guildCol = function() return { label = "Guild", width = 80, fit = true,
         get = function(i) return i.e.guild or "", GREY end } end
@@ -231,6 +255,32 @@ local function Build(p)
     }, opts)
     lists.ignored = History.MakeList(panel, "Ignored", {
         nameCol(), levelCol(), guildCol(),
+    }, opts)
+
+    -- Kill on Sight: one row per enemy, all guildmates' entries together.
+    local function FirstReason(i)
+        for n = #i.entries, 1, -1 do
+            local r = ns.KOS:ReasonText(i.entries[n])
+            if r ~= "" then return r end
+        end
+        return "-", GREY
+    end
+    local function AddedBy(i)
+        local first = i.entries[1].adder
+        return first .. (#i.entries > 1 and (" +" .. (#i.entries - 1)) or "")
+    end
+    local function Expires(i)
+        local last = 0
+        for _, k in ipairs(i.entries) do last = math.max(last, ns.KOS:ExpiresAt(k)) end
+        local days = math.max(0, math.ceil((last - (GetServerTime and GetServerTime() or time())) / 86400))
+        return ("%d days"):format(days), days <= 3 and RED or GREY
+    end
+    lists.kos = History.MakeList(panel, "Kill on Sight", {
+        { label = "Name", width = 120, flex = 1, get = function(i) return i.name, ClassColor(i.e) end },
+        levelCol(), guildCol(),
+        { label = "Reason", width = 90, fit = true, get = FirstReason },
+        { label = "Added by", width = 80, fit = true, get = AddedBy },
+        { label = "Expires in", width = 60, fit = true, get = Expires },
     }, opts)
 
     for _, l in pairs(lists) do
@@ -254,6 +304,7 @@ local function Build(p)
     panel:SetScript("OnShow", Refresh)
     panel:SetScript("OnHide", StopTicker)
     ns:RegisterCallback("ENEMIES_CHANGED", function() if panel:IsVisible() then Refresh() end end)
+    ns:RegisterCallback("KOS_CHANGED", function() if panel:IsVisible() then Refresh() end end)
     Refresh()
 end
 

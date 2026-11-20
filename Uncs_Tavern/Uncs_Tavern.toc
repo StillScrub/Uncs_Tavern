@@ -30,6 +30,7 @@ Modules\Alerts.lua
 Modules\Mail.lua
 Modules\PvPStats.lua
 Modules\Enemies.lua
+Modules\KOS.lua
 Modules\PvPTab.lua
 Modules\NearbyWindow.lua
 Modules\PvPProbe.lua
