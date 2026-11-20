@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-20
+
 ### Added
 - **Mailbox: Guild Requests panel.** Docked to the right of the mail window, it lists guildmates' open requests you can fill from your bags. **Fill Send Mail** puts in the recipient, subject and exact amount (splitting stacks for you); you press Send yourself. **Fill anyway** when others claimed the rest, **Clear** empties the form.
 - Sent mail to a guildmate with open requests is marked as on its way (your claim) automatically, whether you used Fill or not. Requests your mail fully covers are greyed out until they arrive, and rows show who else is already sending.
@@ -138,7 +140,8 @@ First release.
 - Wishlist uses drag only: shift-click opened the bag's split-stack box, which grabbed keyboard input.
 - Level-up posts now go through: WoW: Forever blocks addon chat that isn't triggered by a click.
 
-[Unreleased]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.3.0...v0.4.0
