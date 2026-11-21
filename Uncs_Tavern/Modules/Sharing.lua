@@ -30,7 +30,7 @@ local popup
 
 local function CreatePopup()
     popup = CreateFrame("Frame", "UncsTavernSharingPopup", UIParent, "BasicFrameTemplateWithInset")
-    popup:SetSize(420, 250)
+    popup:SetSize(440, 250) -- height fits the text (FitPopup)
     popup:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
     popup:SetFrameStrata("DIALOG")
     popup:SetClampedToScreen(true)
@@ -50,6 +50,7 @@ local function CreatePopup()
     popup.question:SetJustifyH("LEFT")
 
     local body = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    popup.body = body
     body:SetPoint("TOPLEFT", popup.question, "BOTTOMLEFT", 0, -10)
     body:SetPoint("RIGHT", popup, "RIGHT", -16, 0)
     body:SetJustifyH("LEFT")
@@ -93,7 +94,9 @@ local function MaybeAsk()
     if not s or s.asked or ns.testGuildKey then return end
     if not popup then CreatePopup() end
     popup.question:SetText(("Enable Unc's Tavern sharing for %s?"):format(GuildName()))
+    -- Grow to fit: title bar + question + gap + text + gap + buttons.
     popup:Show()
+    popup:SetHeight(34 + popup.question:GetStringHeight() + 10 + popup.body:GetStringHeight() + 18 + 22 + 14)
 end
 
 ns:RegisterEvent("PLAYER_ENTERING_WORLD", function() C_Timer.After(ASK_DELAY, MaybeAsk) end)

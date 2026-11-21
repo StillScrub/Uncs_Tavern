@@ -39,14 +39,105 @@ function ns:PlayerName()
     return first
 end
 
--- Key for per-guild data ("Guild Name@Realm"), or nil when not in a guild.
+-- The realm part of guild keys: the realm's ID ("#93"), because realm names can change
+-- (a renamed realm made every guild look new). GetRealmID() returns 0 on Forever, so the
+-- ID is read from my own GUID ("Player-<realm ID>-<number>"). Name only as a last resort.
+local function RealmPart()
+    local ok, id = pcall(GetRealmID or function() end)
+    if ok and type(id) == "number" and id > 0 then return "#" .. id end
+    local okG, guid = pcall(UnitGUID, "player")
+    if okG and type(guid) == "string" and not (issecretvalue and issecretvalue(guid)) then
+        local server = guid:match("^Player%-(%d+)%-")
+        if server and tonumber(server) > 0 then return "#" .. server end
+    end
+    return GetRealmName() or ""
+end
+
+-- Key for per-guild data ("Guild Name@#RealmID"), or nil when not in a guild.
 -- The guild is detected at runtime; nothing is hardcoded.
 -- /tavern securitytest swaps in a throwaway key (ns.testGuildKey) while it runs.
 function ns:GuildKey()
     if ns.testGuildKey then return ns.testGuildKey end
     local guild = IsInGuild() and GetGuildInfo("player")
     if not guild then return nil end
-    return guild .. "@" .. (GetRealmName() or "")
+    return guild .. "@" .. RealmPart()
+end
+
+-- Every account-wide table stored per guild key.
+local GUILD_TABLES = { "sharing", "wishlist", "pvp", "helpedLedger", "roster", "kos", "milestones",
+    "perms", "modActions", "guildLog", "officerLog", "mailSent" }
+
+-- Entries up to two levels deep: { requests = {} } counts as empty.
+local function Size(v)
+    if type(v) ~= "table" then return 0 end
+    local n = 0
+    for _, x in pairs(v) do n = n + (type(x) == "table" and Size(x) or 1) end
+    return n
+end
+
+-- Old keys of this guild saved under a realm NAME ("Guild@Some Realm"), with how much each holds.
+local function OldKeys(tables, guild)
+    local prefix, sizes = guild .. "@", {}
+    for _, t in ipairs(tables) do
+        for k, v in pairs(type(t) == "table" and t or {}) do
+            if type(k) == "string" and k:sub(1, #prefix) == prefix and not k:sub(#prefix + 1):match("^#%d+$") then
+                sizes[k] = (sizes[k] or 0) + Size(v)
+            end
+        end
+    end
+    local best, most = nil, 0
+    for k, n in pairs(sizes) do if n > most then best, most = k, n end end
+    return best
+end
+
+-- Keys used to contain the realm name. When this guild's ID-based key is still unused,
+-- take over the fullest old name-based key of the same guild on this account (the realm
+-- was renamed, or this is the first login since keys changed). Only with a realm ID, so
+-- two same-named guilds on different realms are never merged. Called by Comm.lua when
+-- the guild key changes, before anything is read for the new guild.
+local adopted = {}
+function ns:AdoptOldGuildKey(key)
+    if not (key and ns.db) or ns.testGuildKey or adopted[key] then return end
+    adopted[key] = true
+    local guild = key:match("^(.*)@#%d+$")
+    if not guild then return end
+    local moved = false
+
+    local s = ns.db.sharing[key]
+    if not (type(s) == "table" and s.asked) then
+        local tables = {}
+        for _, name in ipairs(GUILD_TABLES) do tables[#tables + 1] = ns.db[name] end
+        local old = OldKeys(tables, guild)
+        if old then
+            for _, name in ipairs(GUILD_TABLES) do
+                local t = ns.db[name]
+                if type(t) == "table" and t[old] ~= nil then
+                    if Size(t[key]) == 0 or (name == "sharing" and not (type(t[key]) == "table" and t[key].asked)) then
+                        t[key] = t[old]
+                    end
+                    t[old] = nil
+                end
+            end
+            moved = true
+        end
+    end
+
+    -- This character's History (per character, so checked on each character).
+    local h = ns.charDB and ns.charDB.history
+    if type(h) == "table" and type(h.byGuild) == "table" and Size(h.byGuild[key]) == 0 then
+        local old = OldKeys({ h.byGuild }, guild)
+        if old then
+            h.byGuild[key] = h.byGuild[old]
+            h.byGuild[old] = nil
+            moved = true
+        end
+    end
+
+    if moved then
+        ns:Fire("WISHLIST_CHANGED", nil, "remote")
+        ns:Fire("PVP_STATS_CHANGED")
+        ns:Fire("HISTORY_CHANGED")
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -169,6 +260,10 @@ local DEFAULTS = {
         nearbyWindow  = true,   -- the movable Nearby window (NearbyWindow.lua)
         nearbyLocked  = false,
         nearbyHideEmpty = false,
+        deathCard     = true,   -- "Add to Kill on Sight" under the death popup (DeathKOS.lua)
+        kosSuggest    = true,   -- suggest adding a player who keeps killing me
+        kosSuggestKills = 2,    --   ...this many kills
+        kosSuggestMinutes = 30, --   ...within this many minutes
         requestExpiryDays = 14, -- forget other players' requests after this many days unseen
         debug         = false,  -- enables /tavern securitytest
     },

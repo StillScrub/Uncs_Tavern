@@ -499,6 +499,7 @@ local function OnGuildUpdate()
     local key = ns:GuildKey()
     if key == currentKey then return end
     currentKey = key
+    ns:AdoptOldGuildKey(key) -- old realm-name keys -> realm-ID key (Core.lua)
     wipe(queue)
     wipe(held)
     wipe(buckets)
