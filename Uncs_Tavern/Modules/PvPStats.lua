@@ -380,6 +380,22 @@ local function IsPlayerSource(e)
     return type(flags) == "number" and bit.band(flags, PLAYER_CONTROLLED) ~= 0
 end
 
+-- Who dealt the killing blow of my newest death, read from the death recap right away
+-- (DeathKOS.lua's death-screen card). Returns:
+--   name, guid      a player
+--   false, "pet"    a player's pet (its owner isn't in the recap)
+--   false, "pve"    a mob or the environment
+--   nil             no recap
+function PvP:RecapKiller()
+    local events = RecapEvents()
+    local e = events and KillingBlow(events)
+    if not e then return nil end
+    if not IsPlayerSource(e) then return false, "pve" end
+    local guid = e.sourceGUID
+    if type(guid) == "string" and guid:match("^Pet%-") then return false, "pet" end
+    return e.sourceName, guid
+end
+
 local function RecordDeath(deathAt)
     local p = Mine()
     if not UnitIsDeadOrGhost("player") then
