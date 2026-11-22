@@ -269,6 +269,8 @@ local DEFAULTS = {
         kosPlateSkull = true,   -- skull over their nameplates
         kosTooltip    = true,   -- line on their tooltips
         kosGuildWarn  = false,  -- warn about members of guilds with several KOS players
+        qolWellRested = true,   -- Well Rested watch (QoL.lua)
+        qolXPFood     = true,   -- XP food watch (QoL.lua)
         requestExpiryDays = 14, -- forget other players' requests after this many days unseen
         debug         = false,  -- enables /tavern securitytest
     },
@@ -282,6 +284,7 @@ local DEFAULTS = {
     enemies    = {}, -- [name] = enemy player I've seen, local only (Enemies.lua)
     enemyIgnore = {}, -- [name] = true: hidden from the PvP tab, not tracked (Enemies.lua)
     kos        = {}, -- [guildKey][adder#target] = Kill on Sight entries (KOS.lua)
+    xpFood     = {}, -- [spellID] = true|false: does this Well Fed buff give XP (QoL.lua, learned)
     milestones = {}, -- [guildKey] = { levels = { [name] = level }, done = { [name] = true } } (Milestones.lua)
     -- Phase B (Permissions.lua, Moderation.lua, GuildLog.lua), all per guild key:
     perms      = {}, -- [guildKey] = { t, mod, log, days, ranks }: rank config from the guild leader
