@@ -188,12 +188,12 @@ end
 local function Suggest(name, count)
     local minutes = math.floor(Window() / 60)
     ns.Dialog:Show({
-        text = ("%s has killed you %d times in %d minutes.\n\nAdd them to the guild Kill on Sight list?")
-            :format(ClassColored(name), count, minutes),
+        text = ("%s has killed you %s in %d minutes.\n\nAdd them to the guild Kill on Sight list?")
+            :format(ClassColored(name), count == 1 and "once" or (count .. " times"), minutes),
         accept = "Add",
         cancel = "Not now",
         onAccept = function()
-            local ok, err = KOS:Add(name, nil, 0, ("Killed me %d times in %d min"):format(count, minutes))
+            local ok, err = KOS:Add(name, nil, 0, ("Killed me %s in %d min"):format(count == 1 and "once" or (count .. " times"), minutes))
             if ok then
                 ns:Print(("Added %s to the guild Kill on Sight list."):format(name))
             elseif err then
@@ -220,7 +220,7 @@ local function OnPvPDeath(_, killer, guid)
     for i = #list, 1, -1 do
         if now - list[i] > window then table.remove(list, i) end
     end
-    local need = ns:Int(S().kosSuggestKills, 2, 10) or 2
+    local need = ns:Int(S().kosSuggestKills, 1, 10) or 2
     if #list < need or KOS:Mine(name) then return end
     if suggested[name] and now - suggested[name] < window then return end
     suggested[name] = now
@@ -246,8 +246,8 @@ ns.Settings:RegisterToggle({
 ns.Settings:RegisterChoice({
     category = "pvp", key = "kosSuggestKills", order = 32, indent = 1,
     label = "Ask after",
-    choices = { 2, 3, 4, 5 },
-    format = function(v) return ("%d kills"):format(tonumber(v) or 2) end,
+    choices = { 1, 2, 3, 4, 5 },
+    format = function(v) v = tonumber(v) or 2 return v == 1 and "1 kill" or ("%d kills"):format(v) end,
     disabled = function() return not S().kosSuggest end,
 })
 ns.Settings:RegisterChoice({
@@ -267,7 +267,7 @@ ns:RegisterCommand("kostest", function(arg)
     name = ok and type(name) == "string" and ns:ValidName(ns:CleanText(name, 48)) or nil
     if not name then ns:Print("Target a player first.") return end
     if strtrim(arg or "") == "suggest" then
-        Suggest(name, ns:Int(S().kosSuggestKills, 2, 10) or 2)
+        Suggest(name, ns:Int(S().kosSuggestKills, 1, 10) or 2)
     else
         Fill(nil, name)
         C_Timer.After(20, function() if card and card:GetParent() == UIParent then card:Hide() end end)
