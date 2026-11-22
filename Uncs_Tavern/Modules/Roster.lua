@@ -11,6 +11,7 @@
 --   ns.PvPStats:AddTooltip(tooltip, fullName)     extra row-tooltip lines
 --   ns.History:HelpedCount(fullName) -> n          wishlist deliveries (nil = no data; shown on hover)
 --   ns.Comm:CountAddonUsers() -> number
+--   ns.PvPWeek:Badge(fullName) -> texture string   in front of the name (weekly PvP leader)
 local _, ns = ...
 
 local ROW_HEIGHT = 18
@@ -228,7 +229,8 @@ local function InitRow(row, m)
     local c = ClassColor(m.classFile)
     local cells = row.cells
     SetClassIcon(row.classIcon, m.classFile)
-    cells[1]:SetText(m.name)
+    local badge = ns.PvPWeek and ns.PvPWeek:Badge(m.full)
+    cells[1]:SetText(badge and (badge .. " " .. m.name) or m.name)
     cells[1]:SetTextColor(c.r, c.g, c.b)
     cells[2]:SetText(m.level)
     cells[3]:SetText(m.zoneText)
@@ -464,6 +466,7 @@ local function Build(p)
     ns:RegisterEvent("PLAYER_GUILD_UPDATE", OnRosterEvent)
     ns:RegisterCallback("ADDON_USERS_CHANGED", OnRosterEvent)
     ns:RegisterCallback("PVP_STATS_CHANGED", OnRosterEvent)
+    ns:RegisterCallback("PVP_WEEK_CHANGED", OnRosterEvent)
     ns:RegisterCallback("HELPED_CHANGED", OnRosterEvent)
 
     local function LayoutHeaders()

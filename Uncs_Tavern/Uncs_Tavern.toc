@@ -36,6 +36,7 @@ Modules\DeathKOS.lua
 Modules\KOSAlert.lua
 Modules\KOSMod.lua
 Modules\Sightings.lua
+Modules\PvPWeek.lua
 Modules\PvPTab.lua
 Modules\NearbyWindow.lua
 Modules\PvPProbe.lua

@@ -1,4 +1,4 @@
--- Modules\PvPTab.lua: the PvP tab (Nearby, Enemies, Ignored; KOS and Leaderboard come later).
+-- Modules\PvPTab.lua: the PvP tab (Nearby, Enemies, Ignored, Kill on Sight, Leaderboard).
 --
 -- Shows the local enemy book from Enemies.lua. Only you see it; nothing is sent.
 -- Right-click a row: ignore / stop ignoring / forget. Hover: details.
@@ -21,7 +21,7 @@ local views = {
     { key = "enemies", label = "Enemies" },
     { key = "ignored", label = "Ignored" },
     { key = "kos",     label = "Kill on Sight" },
-    { key = "board",   label = "Leaderboard", soon = true },
+    { key = "board",   label = "Leaderboard" },
 }
 
 local GREY = History.GREY
@@ -174,7 +174,10 @@ local INTROS = {
     enemies = "Every enemy player you've seen, with your kills and deaths against them. Only you see this.",
     ignored = "Ignored players are hidden and not tracked. Right-click to stop ignoring.",
     kos     = "The guild's Kill on Sight list: everyone's entries together. Entries last 30 days unless renewed.",
-    board   = "This week's guild PvP leaderboard.",
+    board   = function()
+        local reset = ns.PvPWeek and ns.PvPWeek:ResetText() or ""
+        return (reset ~= "" and (reset .. " ") or "") .. "Open-world kills, self-reported."
+    end,
 }
 
 local function StopTicker()
@@ -200,11 +203,23 @@ function Refresh()
         local v = views[i]
         local b = viewButtons[v.key]
         b:ClearAllPoints()
-        b:SetPoint("TOPRIGHT", panel, "TOPRIGHT", x, -4)
-        x = x - b:GetWidth() - 4
-        if v.key == current then b:LockHighlight() else b:UnlockHighlight() end
+        b:SetPoint("BOTTOMRIGHT", panel, "TOPRIGHT", x, -30)
+        x = x - b:GetWidth() + (b.isTab and 0 or -4)
+        local selected = v.key == current
+        if b.isTab then
+            if selected then pcall(PanelTemplates_SelectTab, b) else pcall(PanelTemplates_DeselectTab, b) end
+        elseif selected then
+            b:LockHighlight()
+        else
+            b:UnlockHighlight()
+        end
     end
-    introText:SetText(INTROS[current] or "")
+    -- The intro line ends where the first tab starts, whatever width the tabs got.
+    introText:ClearAllPoints()
+    introText:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -8)
+    introText:SetPoint("RIGHT", viewButtons[views[1].key], "LEFT", -8, 0)
+    local intro = INTROS[current]
+    introText:SetText(type(intro) == "function" and intro() or intro or "")
     for key, l in pairs(lists) do l.frame:SetShown(key == current) end
     for key, f in pairs(placeholders) do f:SetShown(key == current) end
 
@@ -219,6 +234,10 @@ function Refresh()
         local empty = not ns:GuildKey() and "Join a guild to use the Kill on Sight list."
             or "Nobody on Kill on Sight yet. Right-click an enemy (here, in the Nearby window or on their portrait) to add them."
         lists.kos:SetEntries(ns.KOS:Targets(), empty)
+    elseif current == "board" then
+        local empty = not ns:GuildKey() and "Join a guild to see the weekly leaderboard."
+            or "No PvP numbers this week yet. Guildmates need PvP sharing on (Settings > Sharing)."
+        lists.board:SetEntries(ns.PvPWeek:Board(), empty)
     end
     UpdateTicker()
 end
@@ -231,12 +250,28 @@ local function Build(p)
     introText:SetJustifyH("LEFT")
     introText:SetWordWrap(false)
 
+    -- View switches drawn as the game's top tabs, when this client has that template.
     for _, v in ipairs(views) do
-        local b = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-        b:SetHeight(22)
-        b:SetText(v.label)
-        b:SetWidth(math.max(80, b:GetTextWidth() + 24))
-        b:SetScript("OnClick", function() current = v.key Refresh() end)
+        local name = "UncsTavernPvPView" .. v.key
+        local b
+        for _, template in ipairs({ "PanelTopTabButtonTemplate", "TabButtonTemplate" }) do
+            local ok, f = pcall(CreateFrame, "Button", name, panel, template)
+            if ok and f then b = f b.isTab = true break end
+        end
+        if b then
+            b:SetText(v.label)
+            if not pcall(PanelTemplates_TabResize, b, 0) then b:SetWidth(math.max(80, (b:GetTextWidth() or 60) + 30)) end
+        else
+            b = CreateFrame("Button", name, panel, "UIPanelButtonTemplate")
+            b:SetHeight(22)
+            b:SetText(v.label)
+            b:SetWidth(math.max(80, b:GetTextWidth() + 24))
+        end
+        b:SetScript("OnClick", function()
+            current = v.key
+            if PlaySound and SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB then PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB) end
+            Refresh()
+        end)
         viewButtons[v.key] = b
     end
 
@@ -289,6 +324,29 @@ local function Build(p)
         { label = "Expires in", width = 60, fit = true, get = Expires },
     }, opts)
 
+    -- Weekly leaderboard (PvPWeek.lua): rows are { place, name, k, d, s, kd, me }.
+    local GOLD = { r = 1, g = 0.82, b = 0 }
+    lists.board = History.MakeList(panel, "Leaderboard", {
+        { label = "#", width = 24, get = function(i) return tostring(i.place), i.place == 1 and i.k > 0 and GOLD or GREY end },
+        { label = "Name", width = 120, fit = true, get = function(i)
+            local crown = (i.place == 1 and i.k > 0) and (ns.PvPWeek.CROWN .. " ") or ""
+            return crown .. i.name, i.me and GREEN or HIGHLIGHT_FONT_COLOR end },
+        { label = "Kills", width = 44, fit = true, get = function(i) return tostring(i.k) end },
+        { label = "Deaths", width = 48, fit = true, get = function(i) return tostring(i.d) end },
+        { label = "K/D", width = 40, fit = true, get = function(i) return ("%.2f"):format(i.kd) end },
+        { label = "Best streak", width = 70, fit = true, get = function(i) return tostring(i.s), i.s > 0 and HIGHLIGHT_FONT_COLOR or GREY end },
+        { label = "", width = 0, flex = 1, get = function() return "" end }, -- takes the spare room
+    }, { onEnter = function(i, row)
+        GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(i.name)
+        GameTooltip:AddDoubleLine("Kills this week", tostring(i.k), 0.8, 0.8, 0.8, 1, 1, 1)
+        GameTooltip:AddDoubleLine("Deaths to players", tostring(i.d), 0.8, 0.8, 0.8, 1, 1, 1)
+        GameTooltip:AddDoubleLine("Longest kill streak", tostring(i.s), 0.8, 0.8, 0.8, 1, 1, 1)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Open-world honorable kills (assists count). Self-reported.", 0.5, 0.5, 0.5, true)
+        GameTooltip:Show()
+    end })
+
     for _, l in pairs(lists) do
         l.frame:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -34)
         l.frame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -4, 4)
@@ -311,6 +369,7 @@ local function Build(p)
     panel:SetScript("OnHide", StopTicker)
     ns:RegisterCallback("ENEMIES_CHANGED", function() if panel:IsVisible() then Refresh() end end)
     ns:RegisterCallback("KOS_CHANGED", function() if panel:IsVisible() then Refresh() end end)
+    ns:RegisterCallback("PVP_WEEK_CHANGED", function() if panel:IsVisible() and current == "board" then Refresh() end end)
     Refresh()
 end
 

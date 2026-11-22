@@ -358,6 +358,7 @@ local function MakeList(parent, title, cols, opts)
                 if w ~= col.width then col.width, changed = w, true end
             end
         end
+        l.probe:SetText("") -- some clients draw it despite alpha 0: leave nothing to see
         return changed
     end
 
