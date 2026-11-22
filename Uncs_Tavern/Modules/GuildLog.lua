@@ -11,7 +11,8 @@
 --            Mismatch     less was confirmed than claimed, and the claim lapsed or the
 --                         request closed (shown in red). More than claimed = Confirmed.
 --   (A COD check is planned with the mailbox panel: COD mail is broken on the server.)
---   Moderator actions come from Moderation.lua after its rank check.
+--   Moderator actions come from Moderation.lua and KOSMod.lua after their rank checks
+--   (a Kill on Sight removal is stored with the enemy's name in `requester`).
 --
 -- OFFICER LOG (ranks the leader allows to "See officer log"): moderator actions with
 -- their reasons (they only ever arrive over OFFICER/WHISPER, and are only kept when our
@@ -141,7 +142,9 @@ function Log:ScanNow() Scan() end -- /tavern securitytest
 ns:RegisterCallback("MODERATION", function(_, m)
     local log = Store(ns.db.guildLog)
     if not log or log[m.id] then return end -- re-announcements are the same entry
-    log[m.id] = { kind = m.kind == "D" and "moddel" or "modclear", t = m.t, actor = m.actor,
+    local kinds = { D = "moddel", C = "modclear", K = "kosdel" }
+    if not kinds[m.kind] then return end
+    log[m.id] = { kind = kinds[m.kind], t = m.t, actor = m.actor,
                   requester = m.requester, claimer = m.claimer, itemID = m.itemID, rule = m.rule, armor = m.armor }
     Trim(log)
     Changed()
@@ -164,7 +167,7 @@ function Log:GetOfficer(id) local log = Store(ns.db.officerLog) return log and l
 ---------------------------------------------------------------------------
 -- Saved data: drop anything malformed
 ---------------------------------------------------------------------------
-local KINDS = { deliver = true, moddel = true, modclear = true }
+local KINDS = { deliver = true, moddel = true, modclear = true, kosdel = true }
 ns:RegisterCallback("VALIDATE_DB", function()
     for key, log in pairs(ns.db.guildLog) do
         if type(log) ~= "table" then
@@ -211,10 +214,12 @@ local guildList, officerList
 
 -- A moderator action on a request this client never saw has no item: no lookups then.
 local function Icon(e)
+    if e.kind == "kosdel" then return "Interface\\TargetingFrame\\UI-RaidTargetingIcon_8" end
     if not e.itemID and not e.rule then return "Interface\\Icons\\INV_Misc_QuestionMark" end
     return History.EntryIcon(e)
 end
 local function Name(e)
+    if e.kind == "kosdel" then return "Kill on Sight: " .. e.requester, LIGHT end
     if not e.itemID and not e.rule then return "(a request)", LIGHT end
     return History.EntryName(e)
 end
@@ -227,6 +232,7 @@ end
 
 local function StatusText(e)
     if e.kind == "moddel" then return "Removed by moderator", ORANGE end
+    if e.kind == "kosdel" then return "Taken off by moderator", ORANGE end
     if e.kind == "modclear" then return ("Cleared %s's claim"):format(e.claimer or "?"), ORANGE end
     return e.status, STATUS[e.status]
 end

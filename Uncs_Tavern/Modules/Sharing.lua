@@ -120,6 +120,7 @@ local function DeleteGuildData()
     ns.db.guildLog[key] = nil
     ns.db.officerLog[key] = nil
     ns.db.kos[key] = nil
+    ns.db.kosMod[key] = nil
     local h = ns.charDB.history
     if type(h.byGuild) == "table" then h.byGuild[key] = nil end
     ns:Fire("WISHLIST_CHANGED", nil, "remote")

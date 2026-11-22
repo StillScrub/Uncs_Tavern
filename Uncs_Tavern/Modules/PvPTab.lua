@@ -90,9 +90,16 @@ local function ShowTooltip(item, row, hint)
     if #parts > 0 then GameTooltip:AddLine(table.concat(parts, " "), 1, 1, 1) end
     if e.guild then GameTooltip:AddLine("<" .. e.guild .. ">", 0.6, 1, 0.6) end
     local kos = ns.KOS and ns.KOS:Entries(item.name)
-    if kos then
+    local waiting = not kos and ns.KOS and ns.KOS:PendingEntries(item.name)
+    if waiting and not (item.pending or (ns.Perms and ns.Perms:ICan("mod"))) then waiting = nil end
+    if kos or waiting then
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine(ns.KOS.SKULL .. " Guild Kill on Sight", 1, 0.3, 0.3)
+        if kos then
+            GameTooltip:AddLine(ns.KOS.SKULL .. " Guild Kill on Sight", 1, 0.3, 0.3)
+        else
+            GameTooltip:AddLine("Kill on Sight: waiting for moderator approval", 1, 0.5, 0)
+        end
+        kos = kos or waiting
         for _, k in ipairs(kos) do
             local reason = ns.KOS:ReasonText(k)
             GameTooltip:AddDoubleLine(k.adder .. "  |cff808080" .. date("%b %d", k.t) .. "|r",
@@ -268,6 +275,7 @@ local function Build(p)
         return first .. (#i.entries > 1 and (" +" .. (#i.entries - 1)) or "")
     end
     local function Expires(i)
+        if i.pending then return "Waiting", { r = 1, g = 0.5, b = 0 } end
         local last = 0
         for _, k in ipairs(i.entries) do last = math.max(last, ns.KOS:ExpiresAt(k)) end
         local days = math.max(0, math.ceil((last - (GetServerTime and GetServerTime() or time())) / 86400))

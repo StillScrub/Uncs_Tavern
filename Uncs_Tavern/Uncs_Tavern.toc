@@ -34,6 +34,7 @@ Modules\KOS.lua
 Modules\PlateMarks.lua
 Modules\DeathKOS.lua
 Modules\KOSAlert.lua
+Modules\KOSMod.lua
 Modules\PvPTab.lua
 Modules\NearbyWindow.lua
 Modules\PvPProbe.lua

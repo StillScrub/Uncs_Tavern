@@ -2,12 +2,14 @@
 -- officer log. Set by the guild leader only.
 --
 -- Message (protocol 2, GUILD):
---   K|t|mod|log|days|ranks
+--   K|t|mod|log|days|ranks|flags
 --     t     = server time the leader saved it (newer wins)
 --     mod   = bit mask of rank indexes that may moderate (bit 0 = guild leader)
 --     log   = bit mask of rank indexes that may see the officer log
 --     days  = how long guild log entries are kept (1-90)
 --     ranks = checksum of the guild's rank names when it was saved
+--     flags = bit mask of guild-wide switches (bit 0 = Kill on Sight entries need
+--             moderator approval); missing = 0
 --
 -- TRUST: accepted ONLY when our own roster says the sender is rank 0 (guild leader).
 -- Nothing in a message ever grants a rank: every check reads the person's rank from
@@ -17,7 +19,7 @@
 -- The leader re-announces the config when a guildmate logs in or presses Sync (that is
 -- the leader's own data, so it's not relaying).
 --
--- Stored per guild: ns.db.perms[guildKey] = { t, mod, log, days, ranks }
+-- Stored per guild: ns.db.perms[guildKey] = { t, mod, log, days, ranks, flags }
 local _, ns = ...
 local Comm = ns.Comm
 
@@ -119,6 +121,13 @@ function Perms:ICan(what)
     return self:Can(ns:PlayerName(), what)
 end
 
+-- Guild-wide switches set by the leader (not tied to ranks, so kept when ranks change).
+Perms.FLAG_KOS_APPROVAL = 0
+function Perms:Flag(index)
+    local s = Stored()
+    return s and Bit(s.flags, index) or false
+end
+
 ---------------------------------------------------------------------------
 -- Sending (guild leader only)
 ---------------------------------------------------------------------------
@@ -129,7 +138,7 @@ local function Announce()
     local s = Stored()
     if not s or not Perms:IAmLeader() then return end
     lastAnnounce = GetTime()
-    Comm:Send("K", s.t, s.mod, s.log, s.days, s.ranks)
+    Comm:Send("K", s.t, s.mod, s.log, s.days, s.ranks, s.flags or 0)
 end
 
 local function ScheduleAnnounce(delay)
@@ -138,15 +147,19 @@ local function ScheduleAnnounce(delay)
     C_Timer.After(math.max(delay, ANNOUNCE_GAP - (GetTime() - lastAnnounce)), Announce)
 end
 
--- Leader edits: field = "mod" | "log" (with rankIndex, on) or "days" (value).
+-- Leader edits: field = "mod" | "log" (with rankIndex, on), "days" (value) or
+-- "flag" (bit index, on).
 local function Save(field, rankIndex, on)
     if not Perms:IAmLeader() then return end
     local key = ns:GuildKey()
     if not key then return end
     local cur = Perms:Config()
-    local s = { mod = cur.mod, log = cur.log, days = cur.days or DEFAULT_DAYS }
+    local stored = Stored()
+    local s = { mod = cur.mod, log = cur.log, days = cur.days or DEFAULT_DAYS, flags = stored and stored.flags or 0 }
     if field == "days" then
         s.days = rankIndex
+    elseif field == "flag" then
+        s.flags = SetBit(s.flags, rankIndex, on)
     elseif rankIndex ~= 0 then
         s[field] = SetBit(s[field], rankIndex, on)
     end
@@ -163,14 +176,16 @@ end
 ---------------------------------------------------------------------------
 -- Receiving
 ---------------------------------------------------------------------------
-local function Clean(t, mod, log, days, ranks)
+local function Clean(t, mod, log, days, ranks, flags)
+    flags = ns:Int(flags, 0, 255) or 0
     t = ns:Int(t, 1, Now() + FUTURE_SLACK)
     mod = ns:Int(mod, 0, 2 ^ MAX_RANKS - 1)
     log = ns:Int(log, 0, 2 ^ MAX_RANKS - 1)
     days = ns:Int(days, 1, 90)
     ranks = ns:Int(ranks, 0, 16777215)
     if not (t and mod and log and days and ranks) then return nil end
-    return { t = t, mod = SetBit(mod, 0, true), log = SetBit(log, 0, true), days = days, ranks = ranks }
+    return { t = t, mod = SetBit(mod, 0, true), log = SetBit(log, 0, true), days = days, ranks = ranks,
+             flags = flags ~= 0 and flags or nil }
 end
 
 Comm:RegisterHandler("K", function(sender, ...)
@@ -189,6 +204,8 @@ ns:RegisterCallback("HELLO", function(_, _, flag)
     if flag == "Q" then ScheduleAnnounce(2 + math.random() * 4) end
 end)
 ns:RegisterCallback("SYNC_REQUESTED", function() lastAnnounce = -ANNOUNCE_GAP ScheduleAnnounce(2) end)
+
+function Perms:SetFlag(index, on) Save("flag", index, on and true or false) end
 ns:RegisterCallback("SHARING_CHANGED", function(_, field, value)
     if field == "optIn" and value then ScheduleAnnounce(6) end
 end)
@@ -199,7 +216,7 @@ ns:RegisterCallback("PERMS_CHANGED", function() ns:Fire("SETTINGS_REFRESH") end)
 -- Saved data is checked like a message.
 ns:RegisterCallback("VALIDATE_DB", function()
     for key, s in pairs(ns.db.perms) do
-        local rec = type(key) == "string" and type(s) == "table" and Clean(s.t, s.mod, s.log, s.days, s.ranks)
+        local rec = type(key) == "string" and type(s) == "table" and Clean(s.t, s.mod, s.log, s.days, s.ranks, s.flags)
         ns.db.perms[key] = rec or nil
     end
 end)

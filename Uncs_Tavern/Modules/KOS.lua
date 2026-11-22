@@ -3,13 +3,15 @@
 -- Each guild member keeps their OWN entries ("I put this enemy on Kill on Sight") and
 -- announces them; the guild list is everyone's entries together. An enemy is on the
 -- list while at least one guildmate's entry is active.
---   entry = { target, adder, class, level, guild, rc, reason, t, updated, deleted }
+--   entry = { target, adder, class, level, guild, rc, reason, t, added, updated, deleted }
 --     rc     = reason preset (1..#PRESETS), 0 = own text in `reason` (or none: quick add)
 --     t      = when added / last renewed (server time); active for EXPIRE_DAYS after that
+--     added  = when first added (renewing keeps it); moderator removals and approvals
+--              cover entries added up to the moment of the action (KOSMod.lua)
 --     class / level / guild = what the adder's client saw of the enemy (descriptive only)
 --
 -- Message (protocol 2, GUILD, sharing category "kos"):
---   KS|target|class|level|guild|rc|reason|t|deleted|updated
+--   KS|target|class|level|guild|rc|reason|t|deleted|updated|added
 --
 -- TRUST (see "Security rules" in CLAUDE.md):
 --   * the adder is the sender (set by the server): nobody can add, renew or remove an
@@ -18,7 +20,7 @@
 --     member, class from the game's list, level -1..60, texts cleaned (no escape codes)
 --     and capped, preset in range, times not in the future and not older than the expiry.
 --   * at most MAX_PER_PLAYER active entries per adder; stored entries capped.
--- Moderator removal and approval come later (step 2d).
+-- Moderator removal and approval: KOSMod.lua (sets KOS.filter).
 --
 -- Announcing (like the wishlist): ~20 s after login, when a guildmate logs in or presses
 -- Sync (at most once per ANNOUNCE_GAP), and live on every change. Own removals keep
@@ -48,7 +50,8 @@ KOS.rejected = 0 -- messages refused (for /tavern securitytest)
 local function Now() return GetServerTime and GetServerTime() or time() end
 local EXPIRE = EXPIRE_DAYS * 86400
 
-local cache -- [target] = { entries }, rebuilt after changes
+local cache   -- [target] = { entries }, rebuilt after changes
+local pending -- [target] = { entries } waiting for moderator approval
 
 ---------------------------------------------------------------------------
 -- Storage
@@ -83,17 +86,29 @@ local function Changed()
     ns:Fire("KOS_CHANGED")
 end
 
+function KOS:Refresh() Changed() end
+
+function KOS:Added(e) return e.added or e.t or 0 end
+
+-- KOS.filter(e) (KOSMod.lua): nil = counts, "hide" = removed by a moderator,
+-- "pending" = waiting for moderator approval.
 local function Rebuild()
-    cache = {}
+    cache, pending = {}, {}
     local now = Now()
     for _, e in pairs(Bucket() or {}) do
         if KOS:IsActive(e, now) and Counts(e) then
-            cache[e.target] = cache[e.target] or {}
-            table.insert(cache[e.target], e)
+            local state = KOS.filter and KOS.filter(e)
+            local into = (state == nil and cache) or (state == "pending" and pending) or nil
+            if into then
+                into[e.target] = into[e.target] or {}
+                table.insert(into[e.target], e)
+            end
         end
     end
-    for _, list in pairs(cache) do
-        table.sort(list, function(a, b) return (a.t or 0) < (b.t or 0) end)
+    for _, t in ipairs({ cache, pending }) do
+        for _, list in pairs(t) do
+            table.sort(list, function(a, b) return (a.t or 0) < (b.t or 0) end)
+        end
     end
 end
 
@@ -104,6 +119,19 @@ function KOS:Entries(target)
 end
 
 function KOS:IsKOS(target) return self:Entries(target) ~= nil end
+
+-- Entries for a target waiting for moderator approval (nil = none).
+function KOS:PendingEntries(target)
+    if not cache then Rebuild() end
+    return target and pending[target]
+end
+
+-- Whether this entry is waiting for approval.
+function KOS:IsPending(e)
+    local list = e and self:PendingEntries(e.target)
+    for _, p in ipairs(list or {}) do if p == e then return true end end
+    return false
+end
 
 -- My own active entry for a target.
 function KOS:Mine(target)
@@ -123,15 +151,28 @@ end
 function KOS:MyCount() return ActiveCount(Me()) end
 
 -- { { name, e = { class, level, guild }, entries }, ... } newest first.
+-- Targets only waiting for approval are included for moderators and for their adder,
+-- with pending = true.
 function KOS:Targets()
     if not cache then Rebuild() end
     local out = {}
-    for target, list in pairs(cache) do
+    local rows = {}
+    for target, list in pairs(cache) do rows[target] = { list = list } end
+    local isMod = ns.Perms and ns.Perms:ICan("mod")
+    for target, list in pairs(pending) do
+        if not rows[target] then
+            local show = isMod
+            for _, e in ipairs(list) do if e.adder == Me() then show = true end end
+            if show then rows[target] = { list = list, pending = true } end
+        end
+    end
+    for target, row in pairs(rows) do
+        local list = row.list
         local newest = list[#list]
         -- Descriptive info: my own enemy book if I've seen them, else the newest entry's.
         local seen = ns.Enemies and ns.Enemies:Get(target)
         out[#out + 1] = {
-            name = target, entries = list, newest = newest.t or 0,
+            name = target, entries = list, newest = newest.t or 0, pending = row.pending,
             e = { class = (seen and seen.class) or newest.class, level = (seen and seen.level) or newest.level,
                   guild = (seen and seen.guild) or newest.guild,
                   wins = seen and seen.wins, losses = seen and seen.losses, last = seen and seen.last,
@@ -157,7 +198,7 @@ end
 local function Send(e)
     if e.adder ~= Me() then return end -- never relay
     Comm:Send("KS", e.target, e.class or "", e.level or "", e.guild or "", e.rc or 0, e.reason or "",
-        e.t, e.deleted and 1 or 0, e.updated)
+        e.t, e.deleted and 1 or 0, e.updated, KOS:Added(e))
 end
 
 local lastAnnounce, announcePending = -ANNOUNCE_GAP, false
@@ -206,7 +247,8 @@ function KOS:Add(target, info, rc, reason)
     local e = {
         target = target, adder = Me(), class = ns:ValidClass(info.class), level = ns:Int(info.level, -1, 60),
         guild = info.guild and ns:CleanText(info.guild, 48) or nil, rc = rc, reason = reason ~= "" and reason or nil,
-        t = now, updated = math.max(now, old and (old.updated or 0) + 1 or 0),
+        t = now, added = self:IsActive(old) and self:Added(old) or now,
+        updated = math.max(now, old and (old.updated or 0) + 1 or 0),
     }
     if e.guild == "" then e.guild = nil end
     b[id] = e
@@ -256,7 +298,7 @@ local function Trim(b)
 end
 
 -- Returns true if stored. Also used by the security test.
-function KOS:Merge(sender, target, class, level, guild, rc, reason, t, deleted, updated)
+function KOS:Merge(sender, target, class, level, guild, rc, reason, t, deleted, updated, added)
     local b = Bucket()
     if not b then return false end
     sender = ns:ValidName(sender)
@@ -266,6 +308,7 @@ function KOS:Merge(sender, target, class, level, guild, rc, reason, t, deleted, 
     updated = ns:Int(updated, 1, now + FUTURE_SLACK)
     rc = ns:Int(rc, 0, #self.PRESETS)
     if not (sender and target and t and updated and rc) then Reject() return false end
+    added = ns:Int(added, 1, t) or t -- never after the last renewal
     if target == sender or Comm:IsMember(target) then Reject() return false end
     if level ~= nil and level ~= "" then
         level = ns:Int(level, -1, 60)
@@ -284,10 +327,11 @@ function KOS:Merge(sender, target, class, level, guild, rc, reason, t, deleted, 
     b[id] = {
         target = target, adder = sender, class = ns:ValidClass(class), level = level,
         guild = guild ~= "" and guild or nil, rc = rc, reason = reason ~= "" and reason or nil,
-        t = t, updated = updated, deleted = isDeleted or nil,
+        t = t, added = added, updated = updated, deleted = isDeleted or nil,
     }
     Trim(b)
     Changed()
+    ns:Fire("KOS_RECEIVED", b[id], not old or old.deleted or KOS:Added(old) ~= added)
     return true
 end
 
@@ -328,6 +372,7 @@ ns:RegisterCallback("VALIDATE_DB", function()
                     e.class = ns:ValidClass(e.class)
                     e.level = ns:Int(e.level, -1, 60)
                     e.rc = e.rc or 0
+                    e.added = ns:Int(e.added, 1, e.t) or e.t
                     for _, k in ipairs({ "guild", "reason" }) do
                         local s = type(e[k]) == "string" and ns:CleanText(e[k], k == "guild" and 48 or MAX_REASON) or ""
                         e[k] = s ~= "" and s or nil
@@ -415,6 +460,7 @@ function KOS:FillMenu(root, target, info)
             if self:Renew(target) then ns:Print(("Renewed your Kill on Sight entry for %s."):format(target)) end
         end)
         root:CreateButton("Kill on Sight: remove mine", function() self:ConfirmRemove(target) end)
+        if self.FillModMenu then self.FillModMenu(root, target) end
         return
     end
     root:CreateButton("Kill on Sight: quick add", function() self:QuickAdd(target, info) end)
@@ -423,6 +469,7 @@ function KOS:FillMenu(root, target, info)
         sub:CreateButton(preset, function() self:AddPreset(target, info, i) end)
     end
     sub:CreateButton("Your own reason...", function() self:AskReason(target, info) end)
+    if self.FillModMenu then self.FillModMenu(root, target) end
 end
 
 -- One value from a game function, or nil when it errors or is "secret".
