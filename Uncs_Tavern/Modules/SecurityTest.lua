@@ -5,13 +5,13 @@
 --                         path and prints which were rejected.
 --
 -- Nothing is sent while it runs: Comm swallows every outgoing message (and counts
--- them), the guild roster is a fake one (Alice Test, Bob Test, Lea Der as guild leader), and all data goes to a
+-- them), the guild roster is a fake one (Alice Test, Bob Test, Carl Test, Lea Der as guild leader), and all data goes to a
 -- throwaway guild key that is deleted afterwards. Your real guild's data isn't touched.
 local _, ns = ...
 local W, Comm = ns.Wishlist, ns.Comm
 
 local KEY = "SecurityTest@local"
-local ALICE, BOB, MALLORY = "Alice Test", "Bob Test", "Mallory Evil"
+local ALICE, BOB, CARL, MALLORY = "Alice Test", "Bob Test", "Carl Test", "Mallory Evil"
 local LEADER = "Lea Der" -- rank 0 in the fake roster
 local ITEM = 2589 -- Linen Cloth
 
@@ -39,6 +39,8 @@ local function Wipe()
     ns.db.guildLog[KEY] = nil
     ns.db.officerLog[KEY] = nil
     ns.db.kos[KEY] = nil
+    ns.db.kosMod[KEY] = nil
+    ns.db.pvpWeek[KEY] = nil
     if ns.db.mailSent then ns.db.mailSent[KEY] = nil end
     local h = ns.charDB.history
     if type(h.byGuild) == "table" then h.byGuild[KEY] = nil end
@@ -252,6 +254,71 @@ local function Run()
             K.MAX_PER_PLAYER + 1), kosAccepted == K.MAX_PER_PLAYER)
         Send(MALLORY, KS("Enemy Eight"))
         Expect("Kill on Sight entry from a non-guildie rejected", Kos(MALLORY, "Enemy Eight") == nil)
+
+        -- Moderators (KOSMod.lua): 2|KR|target|at, 2|KA|adder|target|at. Here rank 0-1
+        -- may moderate (Lea Der, Alice), Bob and Carl may not.
+        local function KSA(target, t) -- with the "added" field
+            return Msg("KS", target, "ROGUE", 35, "", 1, "", t, 0, t, t)
+        end
+        Send(ALICE, KSA("Enemy Nine", now))
+        Send(BOB, Msg("KR", "Enemy Nine", now + 1))
+        Expect("Kill on Sight removal from a non-moderator rejected", K:IsKOS("Enemy Nine"))
+        Send(BOB, Msg("KR", "Enemy Nine", now + 1, "rank=0"))
+        Expect("moderator rank claimed in a Kill on Sight removal ignored", K:IsKOS("Enemy Nine"))
+        Send(ALICE, Msg("KR", "Enemy Nine", now + 1))
+        Expect("Kill on Sight removal by a moderator accepted", not K:IsKOS("Enemy Nine"))
+        Expect("Kill on Sight removal shows in the Guild log", ns.GuildLog:Get("K:Enemy Nine:" .. (now + 1)) ~= nil)
+        Send(ALICE, KSA("Enemy Nine", now + 2))
+        Expect("adding them again after a removal is a new entry", K:IsKOS("Enemy Nine"))
+        local rejectedBefore = ns.KOSMod.rejected
+        Send(ALICE, Msg("KR", BOB, now + 1))
+        Expect("Kill on Sight removal naming a guild member rejected", ns.KOSMod.rejected > rejectedBefore)
+
+        -- Approval on (leader's flag): Carl's entries wait, a moderator approves.
+        Send(LEADER, Msg("K", now + 2, 3, 3, 30, hash, 1))
+        Expect("approval switch from the guild leader accepted", ns.KOSMod:ApprovalOn())
+        Send(BOB, Msg("K", now + 3, 3, 3, 30, hash, 0))
+        Expect("approval switch from a non-leader rejected", ns.KOSMod:ApprovalOn())
+        Send(CARL, KSA("Enemy Ten", now))
+        Expect("entry from a non-moderator waits for approval", not K:IsKOS("Enemy Ten") and K:PendingEntries("Enemy Ten") ~= nil)
+        Send(CARL, Msg("KA", CARL, "Enemy Ten", now + 1))
+        Expect("approving your own entry rejected (not a moderator)", not K:IsKOS("Enemy Ten"))
+        Send(ALICE, Msg("KA", CARL, "Enemy Ten", now + 1))
+        Expect("approval by a moderator accepted", K:IsKOS("Enemy Ten"))
+        Send(ALICE, KSA("Enemy Eleven", now))
+        Expect("a moderator's own entry needs no approval", K:IsKOS("Enemy Eleven"))
+
+        -- Sightings (Sightings.lua): 2|KV|target|level|zone. Shown only for enemies on our list.
+        if ns.Sightings then
+            local SG = ns.Sightings
+            local sgBefore = SG.rejected
+            Send(BOB, Msg("KV", "Enemy Eleven", 999, "Somewhere"))
+            Expect("sighting with level 999 rejected", SG.rejected > sgBefore)
+            Expect("sighting of a player not on the list ignored", SG:Receive(BOB, "Random Person", 30, "Somewhere") == nil)
+            Expect("sighting with no zone rejected", SG:Receive(BOB, "Enemy Eleven", 30, "   ") == nil
+                and SG:Receive(BOB, "Enemy Eleven", 30, nil) == nil)
+            local wasShow = ns.db.settings.kosSightShow
+            ns.db.settings.kosSightShow = true
+            Expect("valid sighting of a listed enemy shown (escape codes stripped)",
+                SG:Receive(BOB, "Enemy Eleven", 30, "|cffff0000Booty|r |Hitem:1|hBay|h") == "guild")
+            ns.db.settings.kosSightShow = wasShow
+        end
+    end
+
+    -- Weekly leaderboard (PvPWeek.lua): 2|PW|week|kills|deaths|best
+    if ns.PvPWeek then
+        local week = ns.PvPWeek:Id()
+        local function WeekRec(name) return ns.db.pvpWeek[KEY] and ns.db.pvpWeek[KEY][name] end
+        Send(ALICE, Msg("PW", week, -3, 0, 0))
+        Expect("negative weekly kills rejected", WeekRec(ALICE) == nil)
+        Send(ALICE, Msg("PW", week, 5, 1, 9))
+        Expect("best streak above the week's kills rejected", WeekRec(ALICE) == nil)
+        Send(ALICE, Msg("PW", week, 999999999, 0, 0))
+        Expect("impossible weekly kills rejected", WeekRec(ALICE) == nil)
+        Send(ALICE, Msg("PW", week - 604800, 5, 1, 3))
+        Expect("numbers from another week ignored", WeekRec(ALICE) == nil)
+        Send(ALICE, Msg("PW", week, 12, 3, 5))
+        Expect("valid weekly numbers accepted (stored under the sender only)", (WeekRec(ALICE) or {}).k == 12)
     end
 
     -- Unknown types and floods
@@ -275,7 +342,7 @@ local function SecurityTest()
     Wipe()
     ns.testGuildKey = KEY
     -- You are rank 1 here too, so the officer-log checks have someone allowed to read it.
-    Comm:TestBegin({ [ALICE] = 1, [BOB] = 2, [LEADER] = 0, [ns:PlayerName()] = 1 })
+    Comm:TestBegin({ [ALICE] = 1, [BOB] = 2, [CARL] = 2, [LEADER] = 0, [ns:PlayerName()] = 1 })
     local ok, results = pcall(Run)
     local suppressed = Comm:TestEnd()
     ns.testGuildKey = nil

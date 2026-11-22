@@ -18,9 +18,9 @@ end
 
 local WHAT = {
     wishlist = "your wishlist requests (item or rule, quantity, price, note), your claims, and what you've received",
-    pvp      = "your honorable kills, deaths to players, dishonorable kills/deaths, killing blows and \"Most killed by\"",
+    pvp      = "your honorable kills, deaths to players, dishonorable kills/deaths, killing blows, \"Most killed by\" and this week's kills, deaths and best streak",
     helped   = "who delivered items to you (counts toward their Helped and your History)",
-    kos      = "the enemy players you put on the guild Kill on Sight list, with your reason",
+    kos      = "the enemy players you put on the guild Kill on Sight list, with your reason, and where you spot players on it",
 }
 
 ---------------------------------------------------------------------------

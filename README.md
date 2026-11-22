@@ -19,7 +19,7 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 
 **Guild window swap**
 - The Unc's Tavern icon sits inside the guild window's portrait; it is the only change to Blizzard's UI.
-- Clicking it closes the guild window and opens the Unc's Tavern window in the same spot, with bottom tabs **[your guild's name] · Wishlist · History · Settings**. The icon in its corner swaps back.
+- Clicking it closes the guild window and opens the Unc's Tavern window in the same spot, with bottom tabs **[your guild's name] · Wishlist · History · PvP · Settings**. The icon in its corner swaps back.
 - Drag the window to move it, resize it from the bottom-right corner, or reset it to the guild window's size with the button next to the X. It opens on the guild tab. No guild: no icon.
 
 **Guild tab (roster)**
@@ -33,6 +33,20 @@ The guild is detected automatically, so the addon works for any guild. Everythin
   - Hover a member for battleground kills, killing blows, dishonorable deaths and who has killed them most.
 - **Helped** (on hover): how many times a member has delivered wishlist items to a guildmate, as confirmed by the person who received them.
 - **Sync** button to ask everyone running the addon to check in again.
+
+**PvP tab**
+- **Nearby:** enemy players in view right now (nameplates, target, mouseover). **Enemies:** everyone you've met, with your kills and deaths against each. Both are local: only you see them. Not tracked in dungeons, battlegrounds or sanctuaries.
+- **Nearby window:** a small movable list of enemies in view. Click a name to target them, double-click for a skull over their nameplate (only you see it), right-click for options.
+- **Kill on Sight:** the guild's shared list. Add an enemy from the Nearby window, the PvP tab, their portrait's right-click menu, the death screen, a key binding or `/tavern kos [reason]`. Entries last 30 days unless renewed (up to 25 per player); only you can change yours.
+  - A warning and sound when one is nearby, a skull over their nameplate, a tooltip line, and an offer to add someone who keeps killing you.
+  - **Sightings:** when you spot one, guildmates see where; the player who added them gets a bigger alert.
+  - **Moderators** can take an enemy off the list (shown in the Guild log), and the guild leader can require moderator approval for new entries.
+  - Import your own **Spy** Kill on Sight list (Spy's list is only read).
+- **Nemesis alert:** a warning when the enemy who has killed you the most shows up.
+- **Leaderboard:** this week's open-world kills, deaths, K/D and best streak (self-reported), reset with the game's weekly reset. The leader gets a crown on the guild roster.
+
+**Quality of life**
+- A small reminder when **Well Rested** is missing, low on stacks or about to run out, and when you have no **Well Fed** buff that gives bonus experience. At login, on leaving a rest area and when a buff drops; never in combat; nothing at level 60. Turn each off in Settings > Quality of life.
 
 **Wishlist tab**
 - Request items: drag an item from your bags into the slot or **search by name**, set quantity, an optional note, and payment (**Gift** or **Pay up to** a price per item). *Pay up to is greyed out for now: Cash on Delivery mail fails on the WoW: Forever server.*
@@ -71,7 +85,7 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 
 **Minimap button & Settings**
 - Minimap button: left-click opens or closes Unc's Tavern (swapping with the guild window if it's open), right-click opens its Settings; drag to move.
-- Settings tab in the style of the game's Options window: categories on the left (General, Alerts, Minimap, Sharing), their settings on the right, a Defaults button per page; hover a setting for its description.
+- Settings tab in the style of the game's Options window: categories on the left (General, Alerts, Minimap, Quality of life, PvP, Sharing, Permissions), their settings on the right, a Defaults button per page; hover a setting for its description.
 
 ## Screenshots
 
@@ -111,6 +125,10 @@ To update, delete the old `Uncs_Tavern` folder and extract the new zip the same 
 | `/tavern help` | List all commands |
 | `/tavern sync` | Show who in the guild runs the addon |
 | `/tavern wishlist` | Show wishlist sync status |
+| `/tavern nearby` | Show or hide the Nearby enemies window |
+| `/tavern kos [reason]` | Put your target on the guild Kill on Sight list |
+| `/tavern kosimport` | Add your Spy Kill on Sight list to the guild list |
+| `/tavern qol` | Show your Well Rested and XP food reminders now |
 | `/tavern levelup` | Preview your level-up line (sends nothing) |
 | `/tavern levelup popup` | Show the level-up popup now |
 | `/tavern pvpdebug` | Print your PvP numbers, where they come from, and the last kill/death signal |
@@ -118,12 +136,9 @@ To update, delete the old `Uncs_Tavern` folder and extract the new zip the same 
 | `/tavern debug on` / `off` | Developer options |
 | `/tavern securitytest` | Developer check: feeds forged messages to the addon in a sandbox and prints which were rejected (sends nothing; needs debug on) |
 
-The minimap button works like `/tavern` (right-click opens the Settings tab). You can also bind a key to open and close it: **Options > Keybindings > AddOns > Unc's Tavern** (no key is set by default).
+The minimap button works like `/tavern` (right-click opens the Settings tab). You can also bind keys under **Options > Keybindings > AddOns > Unc's Tavern** (none set by default): open and close Unc's Tavern, and put your target on Kill on Sight.
 
 ## Roadmap
-
-Coming soon:
-- **Mailbox "Guild Requests" panel:** pick a request and get a ready-to-send mail draft (recipient, items, COD). You press Send.
 
 Later:
 - **Ledger keepers (opt-in, off by default):** the guild leader can let trusted ranks pass on other players' requests and claims, so you see a request even if you're never online at the same time as its owner. Owners and receivers each have to switch it on themselves, behind a "use at your own risk" warning; passed-on rows are labelled "via <Keeper>" until the owner confirms them.
@@ -131,10 +146,10 @@ Later:
 ## Privacy & Safety
 
 - **Opt-in:** the first time you log in with a guild, the addon asks whether to share with that guild. Until you click Enable it sends nothing and accepts nothing. You can switch sharing, or each part of it, off any time in Settings.
-- **What is shared** (only with members of your current guild who run the addon): your wishlist requests and claims and what you've received; your PvP numbers; who delivered items to you.
+- **What is shared** (only with members of your current guild who run the addon): your wishlist requests and claims and what you've received; your PvP numbers (lifetime and this week); who delivered items to you; the enemies you put on Kill on Sight and where you spot them. Your enemy list, Nemesis and quality-of-life reminders stay on your PC.
 - **Never shared:** your bags, gold, mail, other guilds' data, or which characters belong to you.
 - **Stays in the guild:** data is stored per guild. Leaving or changing guild stops syncing and hides the old data; **Delete this guild's data** in Settings removes it.
-- **Can't be faked by a modified copy:** only you can create, change or remove your requests and claims; PvP numbers are accepted only about the sender (and labelled self-reported); Helped counts only when the receiver's own addon confirms it. Received text is stripped of links, colors and textures, and item names are always built by your own game client.
+- **Can't be faked by a modified copy:** only you can create, change or remove your requests and claims; PvP numbers are accepted only about the sender (and labelled self-reported); Kill on Sight entries only from the player who added them, and moderator actions only from ranks your own roster says may moderate; Helped counts only when the receiver's own addon confirms it. Received text is stripped of links, colors and textures, and item names are always built by your own game client.
 - **Your money and items:** the addon never sends or takes mail, pays COD, trades or sells anything. It can fill things in; you always press the game's own button. It warns you when a guildmate's COD is above your wishlist price.
 
 Found a security problem? Please report it privately; see [SECURITY.md](SECURITY.md).

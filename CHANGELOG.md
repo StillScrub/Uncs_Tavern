@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **PvP tab** with five views: **Nearby** (enemy players in view right now), **Enemies** (everyone you've met, with your kills and deaths against each), **Ignored**, **Kill on Sight** and **Leaderboard**. The enemy list is local: only you see it.
+- **Nearby window:** a small movable list of enemy players in view. Click a name to target them, double-click to put a skull over their nameplate (only you see it), right-click for options.
+- **Guild Kill on Sight list.** Add enemies from the Nearby window, the PvP tab, the right-click menu of an enemy's portrait, the death screen, a key binding or `/tavern kos [reason]`, with a reason (presets or your own) or without. Entries last 30 days unless renewed, up to 25 per player, and only you can change or remove yours.
+- Kill on Sight extras (Settings > PvP): a warning and sound when one is nearby, a skull over their nameplate, a line on their tooltip, an optional warning about enemies from guilds with several players on the list, and an offer to add someone who kills you repeatedly (1 to 5 kills within a time you choose).
+- **Moderators** (the ranks allowed under Settings > Permissions) can take an enemy off the guild list; it shows in the Guild log. The guild leader can also require **moderator approval** for entries from other ranks.
+- **Import your Spy Kill on Sight list** into the guild list (Settings > PvP or `/tavern kosimport`). Spy's own list is only read, never changed.
+- **Sightings:** when you spot someone on the Kill on Sight list, guildmates see where ("seen in <zone> by <you>"), and the player who added them gets a bigger alert.
+- **Nemesis alert:** a warning when the enemy who has killed you the most shows up. Local only.
+- **Weekly PvP leaderboard:** this week's open-world kills, deaths, K/D and best kill streak for everyone sharing PvP stats, reset with the game's weekly reset. The week's leader gets a crown on the guild roster.
+- **Quality of life** (Settings > Quality of life): a small reminder when Well Rested is missing, low on stacks or about to run out, and when you have no Well Fed buff that gives bonus experience. At login, on leaving a rest area and when a buff drops; never in combat; nothing at level 60. `/tavern qol` shows them on demand.
+
+### Fixed
+- Guild data from other players could disappear after logging in, with the "Enable sharing" question showing again, when the game reported an empty realm name. Data is now kept under the realm's ID, and anything saved under the old name is recovered automatically.
+- The "Enable sharing" popup could cut off its text at the bottom.
+- A stray line of text could show over the title of some lists.
+
 ## [0.5.0] - 2026-11-20
 
 ### Added
