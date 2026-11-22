@@ -43,4 +43,5 @@ Modules\PvPProbe.lua
 Modules\Cheers.lua
 Modules\Milestones.lua
 Modules\QoL.lua
+Modules\QoLBag.lua
 Modules\SecurityTest.lua

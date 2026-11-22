@@ -258,7 +258,7 @@ function QoL:Check(reason)
         local left, exp = Remaining(r)
         if not r then
             if general or (reason == "drop" and had.rested) then
-                Add("noRest", "No Well Rested buff. Use your sleeping bag for bonus experience.", REST_ICON)
+                Add("noRest", "No Well Rested buff. Use your sleeping bag.", REST_ICON)
             end
         elseif general and stacks > 0 and stacks < WELL_RESTED_MAX then
             Add("lowRest", ("Only %d of %d Well Rested stacks. Use your sleeping bag.")
@@ -266,7 +266,7 @@ function QoL:Check(reason)
         end
         if r and left and left <= REFRESH_BEFORE and left > 0 and warnedExpiry ~= exp then
             warnedExpiry = exp
-            Add("refresh", ("Well Rested runs out in %d minutes. Use your sleeping bag now to skip the wait.")
+            Add("refresh", ("Well Rested ends in %d min. Use your sleeping bag now.")
                 :format(math.max(1, math.floor(left / 60))), REST_ICON)
         end
         ScheduleRefresh(r)
@@ -325,7 +325,10 @@ ns:RegisterCallback("VALIDATE_DB", function()
     end
 end)
 
-ns:RegisterCommand("qol", function() QoL:Check("command") end, "check your Well Rested and XP food buffs now")
+ns:RegisterCommand("qol", function()
+    QoL:Check("command")
+    if ns.QoLBag then ns:Print(ns.QoLBag:Status()) end
+end, "check your Well Rested and XP food buffs, and your sleeping bag, now")
 
 ---------------------------------------------------------------------------
 -- Settings > Quality of life

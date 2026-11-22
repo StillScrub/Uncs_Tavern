@@ -276,6 +276,7 @@ local DEFAULTS = {
         nemesisSound  = true,
         qolWellRested = true,   -- Well Rested watch (QoL.lua)
         qolXPFood     = true,   -- XP food watch (QoL.lua)
+        qolSleepingBag = true,  -- sleeping bag not in my bags (QoLBag.lua)
         requestExpiryDays = 14, -- forget other players' requests after this many days unseen
         debug         = false,  -- enables /tavern securitytest
     },
