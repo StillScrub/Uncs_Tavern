@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Nemesis alert:** a warning when the enemy who has killed you the most shows up. Local only.
 - **Weekly PvP leaderboard:** this week's open-world kills, deaths, K/D and best kill streak for everyone sharing PvP stats, reset with the game's weekly reset. The week's leader gets a crown on the guild roster.
 - **Quality of life** (Settings > Quality of life): a small reminder when Well Rested is missing, low on stacks or about to run out, and when you have no Well Fed buff that gives bonus experience. At login, on leaving a rest area and when a buff drops; never in combat; nothing at level 60. `/tavern qol` shows them on demand.
+- **Sleeping bag warning:** a character that has carried a sleeping bag gets a warning that stays on screen while it isn't in their bags (left in the bank, for example), until it's back or you click Ignore.
 
 ### Fixed
 - Guild data from other players could disappear after logging in, with the "Enable sharing" question showing again, when the game reported an empty realm name. Data is now kept under the realm's ID, and anything saved under the old name is recovered automatically.

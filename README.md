@@ -47,6 +47,7 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 
 **Quality of life**
 - A small reminder when **Well Rested** is missing, low on stacks or about to run out, and when you have no **Well Fed** buff that gives bonus experience. At login, on leaving a rest area and when a buff drops; never in combat; nothing at level 60. Turn each off in Settings > Quality of life.
+- A warning that stays on screen when a character that had a **sleeping bag** no longer has it in their bags, until it's back or you click Ignore.
 
 **Wishlist tab**
 - Request items: drag an item from your bags into the slot or **search by name**, set quantity, an optional note, and payment (**Gift** or **Pay up to** a price per item). *Pay up to is greyed out for now: Cash on Delivery mail fails on the WoW: Forever server.*
