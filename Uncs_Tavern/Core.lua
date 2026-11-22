@@ -264,6 +264,11 @@ local DEFAULTS = {
         kosSuggest    = true,   -- suggest adding a player who keeps killing me
         kosSuggestKills = 2,    --   ...this many kills
         kosSuggestMinutes = 30, --   ...within this many minutes
+        kosAlert      = true,   -- alert when a Kill on Sight player is nearby (KOSAlert.lua)
+        kosAlertSound = true,
+        kosPlateSkull = true,   -- skull over their nameplates
+        kosTooltip    = true,   -- line on their tooltips
+        kosGuildWarn  = false,  -- warn about members of guilds with several KOS players
         requestExpiryDays = 14, -- forget other players' requests after this many days unseen
         debug         = false,  -- enables /tavern securitytest
     },

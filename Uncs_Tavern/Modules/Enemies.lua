@@ -132,6 +132,12 @@ local function IsEnemyPlayer(unit)
     return true
 end
 
+-- "First Second" of a unit when it's an enemy player, else nil (KOSAlert.lua).
+function Enemies:EnemyName(unit)
+    if Get(UnitExists, unit) ~= true or not IsEnemyPlayer(unit) then return nil end
+    return FullName(unit)
+end
+
 local function Note(unit)
     if not trackingHere or not Enemies:Enabled() then return end
     if not IsEnemyPlayer(unit) then return end
