@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import your Spy Kill on Sight list** into the guild list (Settings > PvP or `/tavern kosimport`). Spy's own list is only read, never changed.
 - **Sightings:** when you spot someone on the Kill on Sight list, guildmates see where ("seen in <zone> by <you>"), and the player who added them gets a bigger alert.
 - **Nemesis alert:** a warning when the enemy who has killed you the most shows up. Local only.
-- **Weekly PvP leaderboard:** this week's open-world kills, deaths, K/D and best kill streak for everyone sharing PvP stats, reset with the game's weekly reset. The week's leader gets a crown on the guild roster.
+- **Weekly PvP leaderboard:** this week's open-world kills, deaths, K/D and best kill streak for everyone sharing PvP stats, reset with the game's weekly reset. The week's leader gets a crown on the guild roster, the most kills a trophy and the best streak a flame, and the top of the board shows the guild's all-time best week for kills and for streak.
 - **Quality of life** (Settings > Quality of life): a small reminder when Well Rested is missing, low on stacks or about to run out, and when you have no Well Fed buff that gives bonus experience. At login, on leaving a rest area and when a buff drops; never in combat; nothing at level 60. `/tavern qol` shows them on demand.
 - **Sleeping bag warning:** a character that has carried a sleeping bag gets a warning that stays on screen while it isn't in their bags (left in the bank, for example), until it's back or you click Ignore.
 

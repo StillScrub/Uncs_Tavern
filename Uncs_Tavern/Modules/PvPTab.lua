@@ -1,4 +1,4 @@
--- Modules\PvPTab.lua: the PvP tab (Nearby, Enemies, Ignored, Kill on Sight, Leaderboard).
+-- Modules\PvPTab.lua: the PvP tab (Leaderboard, Nearby, Enemies, Ignored, Kill on Sight).
 --
 -- Shows the local enemy book from Enemies.lua. Only you see it; nothing is sent.
 -- Right-click a row: ignore / stop ignoring / forget. Hover: details.
@@ -12,16 +12,18 @@ local History = ns.History
 local NEARBY_REFRESH = 5
 
 local panel, introText
+local records -- all-time weekly records in the bar above the tabs: two rows of 4 columns
 local lists, viewButtons, placeholders = {}, {}, {}
-local current = "nearby"
+local current = "board" -- the PvP tab opens on the Leaderboard
+local TAB_SCALE = 0.85   -- the view tabs, a bit smaller, sit in the grey bar above the panel
 local ticker
 
 local views = {
+    { key = "board",   label = "Leaderboard" },
     { key = "nearby",  label = "Nearby" },
     { key = "enemies", label = "Enemies" },
     { key = "ignored", label = "Ignored" },
     { key = "kos",     label = "Kill on Sight" },
-    { key = "board",   label = "Leaderboard" },
 }
 
 local GREY = History.GREY
@@ -198,13 +200,15 @@ end
 
 function Refresh()
     if not panel then return end
-    local x = -4
+    -- Tabs in the grey bar, right-aligned, their bottom on the content area's top edge
+    -- (the panel is inset 4 px). Offsets are divided by the scale (they're in the tab's own units).
+    local x = 0
     for i = #views, 1, -1 do
         local v = views[i]
         local b = viewButtons[v.key]
         b:ClearAllPoints()
-        b:SetPoint("BOTTOMRIGHT", panel, "TOPRIGHT", x, -30)
-        x = x - b:GetWidth() + (b.isTab and 0 or -4)
+        b:SetPoint("BOTTOMRIGHT", panel, "TOPRIGHT", x / TAB_SCALE, (b.isTab and 4 or 8) / TAB_SCALE)
+        x = x - b:GetWidth() * TAB_SCALE + (b.isTab and 0 or -4)
         local selected = v.key == current
         if b.isTab then
             if selected then pcall(PanelTemplates_SelectTab, b) else pcall(PanelTemplates_DeselectTab, b) end
@@ -214,10 +218,6 @@ function Refresh()
             b:UnlockHighlight()
         end
     end
-    -- The intro line ends where the first tab starts, whatever width the tabs got.
-    introText:ClearAllPoints()
-    introText:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -8)
-    introText:SetPoint("RIGHT", viewButtons[views[1].key], "LEFT", -8, 0)
     local intro = INTROS[current]
     introText:SetText(type(intro) == "function" and intro() or intro or "")
     for key, l in pairs(lists) do l.frame:SetShown(key == current) end
@@ -239,6 +239,35 @@ function Refresh()
             or "No PvP numbers this week yet. Guildmates need PvP sharing on (Settings > Sharing)."
         lists.board:SetEntries(ns.PvPWeek:Board(), empty)
     end
+    -- All-time weekly records: most kills on top, best streak under it, in columns
+    -- (label | name | number | week) that line up whatever the names are.
+    local showRecords = current == "board" and ns:GuildKey() ~= nil
+    for _, row in ipairs(records) do
+        for _, fs in ipairs(row) do fs:SetShown(showRecords) end
+    end
+    if showRecords then
+        local W = ns.PvPWeek
+        local kills, streak = W:AllTime()
+        local function Fill(row, icon, label, r)
+            row[1]:SetText(("%s |cffffd100%s:|r"):format(icon, label))
+            row[2]:SetText(r and r.name or "|cff999999none yet|r")
+            row[3]:SetText(r and tostring(r.n) or "")
+            row[4]:SetText(r and ("|cff999999(week of %s)|r"):format(W:WeekText(r.week)) or "")
+        end
+        Fill(records[1], W.TROPHY, "Most kills in a week", kills)
+        Fill(records[2], W.FLAME, "Best streak in a week", streak)
+        -- Each column starts after the widest text above or below it.
+        local GAP, x = 8, 62
+        for col = 1, 4 do
+            local width = 0
+            for _, row in ipairs(records) do
+                row[col]:ClearAllPoints()
+                row[col]:SetPoint("LEFT", panel, "TOPLEFT", x, row.y)
+                width = math.max(width, math.ceil(row[col]:GetStringWidth() or 0))
+            end
+            x = x + width + GAP
+        end
+    end
     UpdateTicker()
 end
 
@@ -246,9 +275,22 @@ local function Build(p)
     panel = p
     introText = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
     introText:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -8)
-    introText:SetPoint("RIGHT", panel, "RIGHT", -470, 0)
+    introText:SetPoint("RIGHT", panel, "RIGHT", -8, 0)
     introText:SetJustifyH("LEFT")
     introText:SetWordWrap(false)
+
+    -- The grey bar between the window title and the tabs (above our panel, right of the
+    -- portrait): the all-time weekly records, shown on the Leaderboard only.
+    records = { { y = 28 }, { y = 14 } } -- most kills on top, best streak under it
+    for _, row in ipairs(records) do
+        for col = 1, 4 do
+            local fs = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+            fs:SetJustifyH("LEFT")
+            fs:SetWordWrap(false)
+            fs:Hide()
+            row[col] = fs
+        end
+    end
 
     -- View switches drawn as the game's top tabs, when this client has that template.
     for _, v in ipairs(views) do
@@ -272,6 +314,7 @@ local function Build(p)
             if PlaySound and SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB then PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB) end
             Refresh()
         end)
+        b:SetScale(TAB_SCALE)
         viewButtons[v.key] = b
     end
 
@@ -331,10 +374,12 @@ local function Build(p)
         { label = "Name", width = 120, fit = true, get = function(i)
             local crown = (i.place == 1 and i.k > 0) and (ns.PvPWeek.CROWN .. " ") or ""
             return crown .. i.name, i.me and GREEN or HIGHLIGHT_FONT_COLOR end },
-        { label = "Kills", width = 44, fit = true, get = function(i) return tostring(i.k) end },
+        { label = "Kills", width = 44, fit = true, get = function(i)
+            return tostring(i.k) .. (i.topKills and (" " .. ns.PvPWeek.TROPHY) or "") end },
         { label = "Deaths", width = 48, fit = true, get = function(i) return tostring(i.d) end },
         { label = "K/D", width = 40, fit = true, get = function(i) return ("%.2f"):format(i.kd) end },
-        { label = "Best streak", width = 70, fit = true, get = function(i) return tostring(i.s), i.s > 0 and HIGHLIGHT_FONT_COLOR or GREY end },
+        { label = "Best streak", width = 70, fit = true, get = function(i)
+            return tostring(i.s) .. (i.topStreak and (" " .. ns.PvPWeek.FLAME) or ""), i.s > 0 and HIGHLIGHT_FONT_COLOR or GREY end },
         { label = "", width = 0, flex = 1, get = function() return "" end }, -- takes the spare room
     }, { onEnter = function(i, row)
         GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
@@ -342,6 +387,8 @@ local function Build(p)
         GameTooltip:AddDoubleLine("Kills this week", tostring(i.k), 0.8, 0.8, 0.8, 1, 1, 1)
         GameTooltip:AddDoubleLine("Deaths to players", tostring(i.d), 0.8, 0.8, 0.8, 1, 1, 1)
         GameTooltip:AddDoubleLine("Longest kill streak", tostring(i.s), 0.8, 0.8, 0.8, 1, 1, 1)
+        if i.topKills then GameTooltip:AddLine(ns.PvPWeek.TROPHY .. " Most kills this week", 1, 0.82, 0) end
+        if i.topStreak then GameTooltip:AddLine(ns.PvPWeek.FLAME .. " Best kill streak this week", 1, 0.82, 0) end
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Open-world honorable kills (assists count). Self-reported.", 0.5, 0.5, 0.5, true)
         GameTooltip:Show()

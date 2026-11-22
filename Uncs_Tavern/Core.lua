@@ -65,7 +65,7 @@ end
 
 -- Every account-wide table stored per guild key.
 local GUILD_TABLES = { "sharing", "wishlist", "pvp", "helpedLedger", "roster", "kos", "milestones",
-    "perms", "modActions", "kosMod", "pvpWeek", "guildLog", "officerLog", "mailSent" }
+    "perms", "modActions", "kosMod", "pvpWeek", "pvpRecords", "guildLog", "officerLog", "mailSent" }
 
 -- Entries up to two levels deep: { requests = {} } counts as empty.
 local function Size(v)
@@ -292,6 +292,7 @@ local DEFAULTS = {
     kos        = {}, -- [guildKey][adder#target] = Kill on Sight entries (KOS.lua)
     kosMod     = {}, -- [guildKey] = { rm, ok }: moderator removals and approvals (KOSMod.lua)
     pvpWeek    = {}, -- [guildKey][name] = { w, k, d, s }: this week's PvP numbers (PvPWeek.lua)
+    pvpRecords = {}, -- [guildKey][name] = { k, kw, s, sw }: best week ever per player (PvPWeek.lua)
     xpFood     = {}, -- [spellID] = true|false: does this Well Fed buff give XP (QoL.lua, learned)
     milestones = {}, -- [guildKey] = { levels = { [name] = level }, done = { [name] = true } } (Milestones.lua)
     -- Phase B (Permissions.lua, Moderation.lua, GuildLog.lua), all per guild key:

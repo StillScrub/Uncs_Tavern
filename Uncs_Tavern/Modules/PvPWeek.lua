@@ -19,15 +19,22 @@
 --   current one; anything else is dropped. Shown as self-reported.
 --
 -- LEADERBOARD: PvP tab > Leaderboard, most kills first (then K/D). The leader gets a
--- crown on the guild roster.
+-- crown on the guild roster; the most kills get a trophy, the best streak a flame.
+--
+-- RECORDS: each player's best week ever (most kills, best streak), from the numbers
+-- this client has received directly (or my own). Shown as the guild's all-time weekly
+-- high scores; players no longer in the guild drop out of them. Nothing extra is sent.
 --
 -- Stored: ns.charDB.pvpWeek = { w, k0, d0, kd, best } (my baseline),
 --         ns.db.pvpWeek[guildKey][name] = { w, k, d, s } (guildmates and my characters)
+--         ns.db.pvpRecords[guildKey][name] = { k, kw, s, sw } (best week: kills / streak)
 local _, ns = ...
 local PvP, Comm = ns.PvPStats, ns.Comm
 
 local Week = {}
 ns.PvPWeek = Week
+
+local MAX_RECORDS = 1000
 
 local MAX_NUM       = 100000
 local SHARE_LOGIN   = 20
@@ -35,6 +42,9 @@ local SHARE_CHANGED = 60
 local CROWN         = "|TInterface\\GroupFrame\\UI-Group-LeaderIcon:0|t"
 
 Week.CROWN = CROWN
+-- Game icons, cropped inside their border: most kills / best streak.
+Week.TROPHY = "|TInterface\\Icons\\INV_Misc_Trophy_Argent:14:14:0:0:64:64:5:59:5:59|t"
+Week.FLAME  = "|TInterface\\Icons\\Spell_Fire_Fire:14:14:0:0:64:64:5:59:5:59|t"
 Week.rejected = 0 -- messages refused (for /tavern securitytest)
 
 local function Now() return GetServerTime and GetServerTime() or time() end
@@ -60,6 +70,29 @@ local function Store()
     if not key then return nil end
     if type(ns.db.pvpWeek[key]) ~= "table" then ns.db.pvpWeek[key] = {} end
     return ns.db.pvpWeek[key]
+end
+
+local function Records()
+    local key = ns:GuildKey()
+    if not key then return nil end
+    if type(ns.db.pvpRecords[key]) ~= "table" then ns.db.pvpRecords[key] = {} end
+    return ns.db.pvpRecords[key]
+end
+
+-- Remember a player's best week (numbers already checked).
+local function NoteRecord(name, w, k, s)
+    local rec = Records()
+    if not rec or (k == 0 and s == 0) then return end
+    local r = rec[name]
+    if not r then
+        local n = 0
+        for _ in pairs(rec) do n = n + 1 end
+        if n >= MAX_RECORDS then return end
+        r = { k = 0, kw = w, s = 0, sw = w }
+        rec[name] = r
+    end
+    if k > r.k then r.k, r.kw = k, w end
+    if s > r.s then r.s, r.sw = s, w end
 end
 
 ---------------------------------------------------------------------------
@@ -101,6 +134,7 @@ local function SaveOwn()
     if not store or not ready then return end
     local k, d, s = Week:Mine()
     store[Me()] = { w = Week:Id(), k = k, d = d, s = s }
+    NoteRecord(Me(), Week:Id(), k, s)
 end
 
 ---------------------------------------------------------------------------
@@ -136,6 +170,7 @@ function Week:Receive(sender, w, k, d, s)
     if not (sender and w and k and d and s) or s > k then self.rejected = self.rejected + 1 return false end
     if math.abs(w - self:Id()) > 3600 then return false end -- another week: not current
     store[sender] = { w = w, k = k, d = d, s = s }
+    NoteRecord(sender, w, k, s)
     ns:Fire("PVP_WEEK_CHANGED")
     return true
 end
@@ -199,6 +234,17 @@ ns:RegisterCallback("VALIDATE_DB", function()
             end
         end
     end
+    for key, rec in pairs(ns.db.pvpRecords) do
+        if type(key) ~= "string" or type(rec) ~= "table" then
+            ns.db.pvpRecords[key] = nil
+        else
+            for name, r in pairs(rec) do
+                local ok = ns:ValidName(name) and type(r) == "table" and ns:Int(r.k, 0, MAX_NUM) and ns:Int(r.s, 0, MAX_NUM)
+                    and ns:Int(r.kw, 1) and ns:Int(r.sw, 1)
+                if not ok then rec[name] = nil end
+            end
+        end
+    end
     local b = ns.charDB.pvpWeek
     if b ~= nil and (type(b) ~= "table" or not ns:Int(b.w, 1) or not ns:Int(b.k0, 0) or not ns:Int(b.d0, 0)) then
         ns.charDB.pvpWeek = nil
@@ -230,8 +276,40 @@ function Week:Board()
         if a.kd ~= b.kd then return a.kd > b.kd end
         return a.name < b.name
     end)
-    for i, row in ipairs(out) do row.place = i end
+    local topK, topS = 0, 0
+    for _, row in ipairs(out) do topK, topS = math.max(topK, row.k), math.max(topS, row.s) end
+    for i, row in ipairs(out) do
+        row.place = i
+        row.topKills = topK > 0 and row.k == topK      -- ties all get it
+        row.topStreak = topS > 0 and row.s == topS
+    end
     return out
+end
+
+-- The guild's all-time weekly high scores among current members:
+-- { name, n, week } for most kills and for best streak (nil = none yet).
+function Week:AllTime()
+    local rec = Records()
+    if not rec then return nil, nil end
+    if ready then SaveOwn() end
+    local rosterReady, me = Comm:RosterReady(), Me()
+    local kills, streak
+    for name, r in pairs(rec) do
+        if name == me or not rosterReady or Comm:IsMember(name) then
+            if r.k > 0 and (not kills or r.k > kills.n or (r.k == kills.n and r.kw < kills.week)) then
+                kills = { name = name, n = r.k, week = r.kw }
+            end
+            if r.s > 0 and (not streak or r.s > streak.n or (r.s == streak.n and r.sw < streak.week)) then
+                streak = { name = name, n = r.s, week = r.sw }
+            end
+        end
+    end
+    return kills, streak
+end
+
+-- "Nov 12": the first day of the week with this id (the id is the next reset).
+function Week:WeekText(id)
+    return date("%b %d", id - 604800)
 end
 
 -- The week's leader (most kills, at least 1), or nil.

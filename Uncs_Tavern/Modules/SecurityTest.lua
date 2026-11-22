@@ -41,6 +41,7 @@ local function Wipe()
     ns.db.kos[KEY] = nil
     ns.db.kosMod[KEY] = nil
     ns.db.pvpWeek[KEY] = nil
+    ns.db.pvpRecords[KEY] = nil
     if ns.db.mailSent then ns.db.mailSent[KEY] = nil end
     local h = ns.charDB.history
     if type(h.byGuild) == "table" then h.byGuild[KEY] = nil end
