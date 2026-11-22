@@ -93,6 +93,8 @@ The guild is detected automatically, so the addon works for any guild. Everythin
 | Guild tab: roster with PvP stats and Helped | Wishlist: item and rule requests |
 |---|---|
 | ![Guild tab](docs/screenshots/guild.png) | ![Wishlist](docs/screenshots/wishlist.png) |
+| **PvP: weekly leaderboard with all-time records** | **Settings: PvP and Kill on Sight** |
+| ![PvP leaderboard](docs/screenshots/pvp-leaderboard.png) | ![PvP settings](docs/screenshots/settings-pvp.png) |
 | **History: your own deliveries** | **Guild log: deliveries and moderator actions** |
 | ![My history](docs/screenshots/myhistory.png) | ![Guild log](docs/screenshots/guildlog.png) |
 | **Officer log: moderator reasons (allowed ranks only)** | **Settings: what you share with your guild** |
