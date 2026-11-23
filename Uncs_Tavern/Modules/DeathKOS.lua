@@ -154,6 +154,7 @@ end
 
 local function ShowCard(retry)
     if not (ns.db and S().deathCard and ns:GuildKey()) then return end
+    if not ns.Enemies:TrackingHere() then return end -- not in battlegrounds, arenas or dungeons
     if not UnitIsDeadOrGhost("player") then return end
     local popup = DeathPopup()
     if not popup then
@@ -205,6 +206,7 @@ end
 
 local function OnPvPDeath(_, killer, guid)
     if not (ns.db and S().kosSuggest and ns:GuildKey()) then return end
+    if not ns.Enemies:TrackingHere() then return end -- open-world deaths only
     if type(guid) == "string" and guid:match("^Pet%-") then return end -- a pet's name isn't its owner's
     local name = KillerName(killer, guid)
     if not name or Comm:IsMember(name) then return end

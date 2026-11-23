@@ -196,7 +196,8 @@ end
 -- Wins and losses (from PvPStats)
 ---------------------------------------------------------------------------
 local function Result(name, guid, field)
-    if not Enemies:Enabled() then return end
+    -- Open world only: battleground and arena fights don't count (nor for Nemesis).
+    if not trackingHere or not Enemies:Enabled() then return end
     local class, race
     if type(guid) == "string" and not Secret(guid) and guid:match("^Player%-") then
         local _, c, r, _, _, gname = Get(GetPlayerInfoByGUID, guid)

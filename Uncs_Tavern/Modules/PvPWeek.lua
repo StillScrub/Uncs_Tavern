@@ -1,11 +1,12 @@
 -- Modules\PvPWeek.lua: this week's PvP numbers and the guild's weekly leaderboard.
 --
 -- MY WEEK (per character): at the first reading of a new week, remember my lifetime
--- open-world honorable kills (PvPStats:WorldKills, like the roster's Kills column) and
--- my PvP deaths counted since install. This week's numbers are the difference:
+-- open-world honorable kills (PvPStats:WorldKills, like the roster's Kills column).
 --   kills  = world honorable kills now - at the start of the week
---   deaths = PvP deaths now - at the start of the week
---   streak = kills since my last PvP death; best = the longest streak this week
+--   deaths = PvP deaths in the open world this week (counted here as they happen)
+--   streak = kills since my last open-world PvP death; best = the longest streak this week
+-- OPEN WORLD ONLY: battlegrounds, arenas and dungeons don't count (Enemies:TrackingHere);
+-- the game's world-kill statistic already leaves battleground kills out.
 -- (Installing mid-week counts from then.) The week is the game's weekly reset
 -- (C_DateAndTime.GetSecondsUntilWeeklyReset); its id is the time of the NEXT reset,
 -- rounded to the hour, so every client agrees on it.
@@ -25,7 +26,7 @@
 -- this client has received directly (or my own). Shown as the guild's all-time weekly
 -- high scores; players no longer in the guild drop out of them. Nothing extra is sent.
 --
--- Stored: ns.charDB.pvpWeek = { w, k0, d0, kd, best } (my baseline),
+-- Stored: ns.charDB.pvpWeek = { w, k0, d0, d, kd, best } (my baseline; d = deaths this week),
 --         ns.db.pvpWeek[guildKey][name] = { w, k, d, s } (guildmates and my characters)
 --         ns.db.pvpRecords[guildKey][name] = { k, kw, s, sw } (best week: kills / streak)
 local _, ns = ...
@@ -109,8 +110,10 @@ local function Base()
     local id = Week:Id()
     if b.w ~= id then
         local k, d = Kills(), Deaths()
-        b.w, b.k0, b.d0, b.kd, b.best = id, k, d, k, 0
+        b.w, b.k0, b.d0, b.d, b.kd, b.best = id, k, d, 0, k, 0
     end
+    -- Saved before deaths were counted per week: start from the old difference.
+    if not ns:Int(b.d, 0) then b.d = math.max(0, Deaths() - (b.d0 or 0)) end
     -- Counters can only go up; if one went down (data reset), start over from here.
     local k, d = Kills(), Deaths()
     if k < (b.k0 or 0) then b.k0, b.kd = k, k end
@@ -123,10 +126,10 @@ end
 function Week:Mine()
     if not ready then return 0, 0, 0, 0 end
     local b = Base()
-    local k, d = Kills(), Deaths()
+    local k = Kills()
     local streak = k - (b.kd or b.k0)
     b.best = math.max(b.best or 0, streak)
-    return math.min(k - b.k0, MAX_NUM), math.min(d - b.d0, MAX_NUM), math.min(b.best, MAX_NUM), streak
+    return math.min(k - b.k0, MAX_NUM), math.min(b.d, MAX_NUM), math.min(b.best, MAX_NUM), streak
 end
 
 local function SaveOwn()
@@ -189,8 +192,11 @@ end)
 ns:RegisterEvent("PLAYER_PVP_KILLS_CHANGED", function() if ready then Changed() end end)
 ns:RegisterCallback("PVP_DEATH", function()
     if not ready then return end
+    -- Battleground, arena and dungeon deaths don't count and don't end the streak.
+    if ns.Enemies and not ns.Enemies:TrackingHere() then return end
     Week:Mine() -- bank the streak before it ends
     local b = Base()
+    b.d = math.min((b.d or 0) + 1, MAX_NUM)
     b.kd = Kills()
     Changed()
 end)
@@ -248,6 +254,8 @@ ns:RegisterCallback("VALIDATE_DB", function()
     local b = ns.charDB.pvpWeek
     if b ~= nil and (type(b) ~= "table" or not ns:Int(b.w, 1) or not ns:Int(b.k0, 0) or not ns:Int(b.d0, 0)) then
         ns.charDB.pvpWeek = nil
+    elseif b ~= nil and b.d ~= nil and not ns:Int(b.d, 0) then
+        b.d = nil -- worked out again from d0
     end
 end)
 
@@ -332,6 +340,7 @@ function Week:ResetText()
     local left = SecondsLeft()
     if not left then return "" end
     local days, hours = math.floor(left / 86400), math.floor((left % 86400) / 3600)
-    if days > 0 then return ("Resets in %dd %dh."):format(days, hours) end
-    return ("Resets in %dh %dm."):format(hours, math.floor((left % 3600) / 60))
+    local day = date("%A", time() + left) -- the weekly reset's day, in local time
+    if days > 0 then return ("Resets in %dd %dh (weekly reset, %s)."):format(days, hours, day) end
+    return ("Resets in %dh %dm (weekly reset, %s)."):format(hours, math.floor((left % 3600) / 60), day)
 end

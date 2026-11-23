@@ -95,7 +95,17 @@ ns:RegisterEvent("UPDATE_MOUSEOVER_UNIT", function() Check("mouseover") end)
 -- Nameplate skull
 ---------------------------------------------------------------------------
 PlateMarks:AddSource(function(name)
-    return ns.db and S().kosPlateSkull and ns:GuildKey() and KOS:IsKOS(name)
+    return ns.db and S().kosPlateSkull and ns:GuildKey() and Enemies:TrackingHere() and KOS:IsKOS(name)
+end)
+
+-- Entering or leaving a battleground or dungeon shows or hides the skulls.
+local tracking
+ns:RegisterCallback("ENEMIES_CHANGED", function()
+    local now = Enemies:TrackingHere()
+    if now ~= tracking then
+        tracking = now
+        PlateMarks:Refresh()
+    end
 end)
 
 ns:RegisterCallback("KOS_CHANGED", function()
@@ -113,7 +123,7 @@ end)
 ---------------------------------------------------------------------------
 if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum.TooltipDataType then
     TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip)
-        if not (ns.db and S().kosTooltip and ns:GuildKey()) then return end
+        if not (ns.db and S().kosTooltip and ns:GuildKey() and Enemies:TrackingHere()) then return end
         if not (tooltip and tooltip.GetUnit and tooltip.AddLine) then return end
         local ok, _, unit = pcall(tooltip.GetUnit, tooltip)
         if not ok or not unit or (issecretvalue and issecretvalue(unit)) then return end

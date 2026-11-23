@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- PvP is now open world only: deaths in battlegrounds and arenas no longer count on the weekly leaderboard or end your kill streak, and battleground fights no longer add to your Enemies list, Nemesis, the death card, the Kill on Sight suggestion, or Kill on Sight skulls and tooltip lines.
+- The leaderboard shows the weekly reset's day and says battleground PvP doesn't count.
+
 ## [0.6.0] - 2026-11-23
 
 ### Added

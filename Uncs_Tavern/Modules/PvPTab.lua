@@ -11,7 +11,7 @@ local History = ns.History
 
 local NEARBY_REFRESH = 5
 
-local panel, introText
+local panel, introText, introNote
 local records -- all-time weekly records in the bar above the tabs: two rows of 4 columns
 local lists, viewButtons, placeholders = {}, {}, {}
 local current = "board" -- the PvP tab opens on the Leaderboard
@@ -171,6 +171,11 @@ local function NearbyEmpty()
     return "No enemy players in view. Turn on enemy nameplates (Shift+V) to spot more."
 end
 
+-- A second line under the intro, for views that need one.
+local NOTES = {
+    board = "Battleground and arena PvP doesn't count towards the leaderboard.",
+}
+
 local INTROS = {
     nearby  = "Enemy players in view right now. Only you see this.",
     enemies = "Every enemy player you've seen, with your kills and deaths against them. Only you see this.",
@@ -220,6 +225,7 @@ function Refresh()
     end
     local intro = INTROS[current]
     introText:SetText(type(intro) == "function" and intro() or intro or "")
+    introNote:SetText(NOTES[current] or "")
     for key, l in pairs(lists) do l.frame:SetShown(key == current) end
     for key, f in pairs(placeholders) do f:SetShown(key == current) end
 
@@ -278,6 +284,11 @@ local function Build(p)
     introText:SetPoint("RIGHT", panel, "RIGHT", -8, 0)
     introText:SetJustifyH("LEFT")
     introText:SetWordWrap(false)
+    introNote = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    introNote:SetPoint("TOPLEFT", introText, "BOTTOMLEFT", 0, -2)
+    introNote:SetPoint("RIGHT", panel, "RIGHT", -8, 0)
+    introNote:SetJustifyH("LEFT")
+    introNote:SetWordWrap(false)
 
     -- The grey bar between the window title and the tabs (above our panel, right of the
     -- portrait): the all-time weekly records, shown on the Leaderboard only.
