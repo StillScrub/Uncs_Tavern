@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-23
+
 ### Fixed
 - PvP is now open world only: deaths in battlegrounds and arenas no longer count on the weekly leaderboard or end your kill streak, and battleground fights no longer add to your Enemies list, Nemesis, the death card, the Kill on Sight suggestion, or Kill on Sight skulls and tooltip lines.
 - The leaderboard shows the weekly reset's day and says battleground PvP doesn't count.
@@ -164,7 +166,8 @@ First release.
 - Wishlist uses drag only: shift-click opened the bag's split-stack box, which grabbed keyboard input.
 - Level-up posts now go through: WoW: Forever blocks addon chat that isn't triggered by a click.
 
-[Unreleased]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/StillScrub/Uncs_Tavern/compare/v0.4.1...v0.4.2
